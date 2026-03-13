@@ -124,8 +124,8 @@ def _run_landmarks(args):
 
 def _run_demo():
     try:
-        from scripts.app import create_demo
-        demo = create_demo()
+        from scripts.app import build_app
+        demo = build_app()
         demo.launch()
     except ImportError:
         print("gradio not installed - run: pip install landmarkdiff[app]")
