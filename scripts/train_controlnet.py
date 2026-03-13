@@ -156,7 +156,7 @@ def _generate_samples(
         decoded = vae.decode(sample_latents / vae.config.scaling_factor).sample
         decoded = ((decoded + 1) / 2).clamp(0, 1)
 
-        # Save as PNG (cast to float32 — BF16 can't convert to numpy)
+        # Save as PNG (cast to float32 - BF16 can't convert to numpy)
         img = (decoded[0].float().permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
         tgt = (target[0].float().permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
         cond = (conditioning[0].float().permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
@@ -203,7 +203,7 @@ def train(
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    # Determine dtype — BF16 on CUDA, FP32 on MPS/CPU
+    # Determine dtype - BF16 on CUDA, FP32 on MPS/CPU
     if device.type == "cuda" and torch.cuda.is_bf16_supported():
         weight_dtype = torch.bfloat16
     else:
@@ -251,7 +251,7 @@ def train(
         weight_decay=1e-2,
     )
 
-    # Cosine schedule — period based on optimizer steps, not forward passes
+    # Cosine schedule - period based on optimizer steps, not forward passes
     total_optimizer_steps = num_train_steps // gradient_accumulation_steps
     lr_lambda = lambda step: 0.5 * (1 + math.cos(math.pi * step / total_optimizer_steps))
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
@@ -269,7 +269,7 @@ def train(
     )
     print(f"Dataset: {len(dataset)} pairs | Batch: {train_batch_size} | Accum: {gradient_accumulation_steps}")
 
-    # ─── Text embeddings (constant — "a photo of a person's face") ───
+    # ─── Text embeddings (constant - "a photo of a person's face") ───
     text_input = tokenizer(
         "a photo of a person's face",
         padding="max_length",

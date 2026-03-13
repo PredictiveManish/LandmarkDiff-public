@@ -51,7 +51,7 @@ def augment_pair(
             a = cv2.flip(a, 1)
             aug_name_parts.append("hf")
 
-        # Color jitter — same params for both
+        # Color jitter - same params for both
         if random.random() < 0.7:
             brightness = random.uniform(0.8, 1.2)
             contrast = random.uniform(0.85, 1.15)
@@ -94,7 +94,7 @@ def augment_pair(
             a = cv2.resize(a[y:y+ch, x:x+cw], (target_size, target_size))
             aug_name_parts.append(f"crop{crop_frac:.2f}")
 
-        # Gaussian noise (different for each image — represents sensor noise)
+        # Gaussian noise (different for each image - represents sensor noise)
         if random.random() < 0.3:
             sigma = random.uniform(2, 8)
             noise_b = np.random.randn(*b.shape) * sigma

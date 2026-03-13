@@ -1,13 +1,5 @@
-"""Deep-dive targeted test suite for the 5 failure areas.
-
-200+ additional tests with heavy parameterization targeting:
-  AREA 1: Face View Estimation (estimate_face_view)
-  AREA 2: IdentityLoss embedding handling (losses.py)
-  AREA 3: Masking noise behavior (masking.py)
-  AREA 4: F.normalize and cosine similarity (torch)
-  AREA 5: Mask compositing (inference.py mask_composite)
-
-Every boundary, edge case, and numerical-stability scenario is tested.
+"""Deep-dive tests for the 5 known failure areas:
+view estimation, identity loss, masking noise, F.normalize, mask compositing.
 """
 
 import math
@@ -44,7 +36,7 @@ from landmarkdiff.losses import (
 # ============================================================================
 
 def _make_face(w=512, h=512, seed=0):
-    """Create a synthetic FaceLandmarks with realistic normalized coordinates."""
+    """Fake face with random coords."""
     rng = np.random.default_rng(seed)
     landmarks = rng.uniform(0.2, 0.8, size=(478, 3)).astype(np.float32)
     return FaceLandmarks(landmarks=landmarks, image_width=w, image_height=h, confidence=0.95)
@@ -53,7 +45,7 @@ def _make_face(w=512, h=512, seed=0):
 def _make_face_with_specific_landmarks(
     nose_tip, left_ear, right_ear, forehead, chin, w=512, h=512,
 ):
-    """Build a FaceLandmarks object with specific landmark positions for view tests.
+    """Fake face with specific key landmarks for view tests.
 
     nose_tip -> index 1
     left_ear -> index 234
@@ -73,7 +65,7 @@ def _make_face_with_specific_landmarks(
 
 
 def _bgr_image(h=512, w=512, seed=42):
-    """Generate a random BGR uint8 image."""
+    """Random BGR test image."""
     return np.random.default_rng(seed).integers(30, 220, size=(h, w, 3), dtype=np.uint8)
 
 

@@ -1,6 +1,6 @@
 """Download FFHQ dataset (thumbnails 128x128 or full 1024x1024) from HuggingFace.
 
-FFHQ (Flickr-Faces-HQ) — 70,000 high-quality face images.
+FFHQ (Flickr-Faces-HQ) - 70,000 high-quality face images.
 License: CC BY-NC-SA 4.0 (research use).
 Source: NVIDIA, Karras et al. 2019.
 
@@ -28,14 +28,7 @@ def download_from_huggingface(
     output_dir: str = "data/ffhq",
     seed: int = 42,
 ) -> None:
-    """Download FFHQ images from HuggingFace datasets.
-
-    Args:
-        num_images: Number of images to download.
-        resolution: Image resolution (128 for thumbnails, 1024 for full).
-        output_dir: Output directory.
-        seed: Random seed for subset selection.
-    """
+    """Download FFHQ subset from HuggingFace."""
     try:
         from datasets import load_dataset
     except ImportError:

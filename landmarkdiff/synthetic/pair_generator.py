@@ -1,10 +1,7 @@
-"""Synthetic training pair generator.
+"""Synthetic pair generator for ControlNet fine-tuning.
 
-Creates (input, conditioning, mask, target) tuples for ControlNet fine-tuning.
-Pipeline: FFHQ image -> extract landmarks -> random FFD manipulation ->
-generate conditioning + mask -> apply clinical augmentation to input.
-
-Augmentations are applied to INPUT only, never to target (ground truth).
+FFHQ -> landmarks -> random FFD -> conditioning + mask -> augment input.
+Augmentations on INPUT only, never target.
 """
 
 from __future__ import annotations
@@ -32,7 +29,7 @@ class TrainingPair:
     """A single training sample for ControlNet fine-tuning."""
 
     input_image: np.ndarray       # augmented input (512x512 BGR)
-    target_image: np.ndarray      # clean target (512x512 BGR) — TPS-warped original
+    target_image: np.ndarray      # clean target (512x512 BGR) - TPS-warped original
     conditioning: np.ndarray      # landmark rendering (512x512 BGR)
     canny: np.ndarray             # canny edge map (512x512 grayscale)
     mask: np.ndarray              # feathered surgical mask (512x512 float32)
@@ -50,18 +47,7 @@ def generate_pair(
     target_size: int = 512,
     rng: np.random.Generator | None = None,
 ) -> TrainingPair | None:
-    """Generate a single training pair from a face image.
-
-    Args:
-        image: BGR input image (any size).
-        procedure: Procedure type (random if None).
-        intensity: Manipulation intensity 0-100 (random 30-90 if None).
-        target_size: Output resolution.
-        rng: Random number generator.
-
-    Returns:
-        TrainingPair or None if face detection fails.
-    """
+    """Generate a single training pair from a face image."""
     rng = rng or np.random.default_rng()
 
     # Resize to target
@@ -113,17 +99,7 @@ def generate_pairs_from_directory(
     target_size: int = 512,
     seed: int = 42,
 ) -> Iterator[TrainingPair]:
-    """Generate training pairs from a directory of face images.
-
-    Args:
-        image_dir: Directory containing face images.
-        num_pairs: Total number of pairs to generate.
-        target_size: Output resolution.
-        seed: Random seed.
-
-    Yields:
-        TrainingPair instances.
-    """
+    """Generate training pairs from a directory of face images."""
     rng = np.random.default_rng(seed)
     image_dir = Path(image_dir)
 

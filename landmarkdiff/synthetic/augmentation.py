@@ -1,9 +1,8 @@
-"""Clinical degradation augmentation pipeline.
+"""Clinical degradation augmentations.
 
-Degrades clean FFHQ/CelebA-HQ images to match real clinical photo distribution.
-Applied from day 1 of training — domain gap prevention, not afterthought.
-
-Each sample gets 3-5 random augmentations from the pool.
+Degrades clean FFHQ/CelebA-HQ to match real clinical photo distribution.
+Applied from day 1 - domain gap prevention, not afterthought.
+3-5 random augmentations per sample.
 """
 
 from __future__ import annotations
@@ -155,20 +154,7 @@ def apply_clinical_augmentation(
     max_augmentations: int = 5,
     rng: np.random.Generator | None = None,
 ) -> np.ndarray:
-    """Apply random clinical degradation augmentations to an image.
-
-    Each sample gets min_augmentations to max_augmentations from the pool,
-    selected by their individual probabilities.
-
-    Args:
-        image: BGR input image (clean FFHQ/CelebA-HQ).
-        min_augmentations: Minimum number of augmentations to apply.
-        max_augmentations: Maximum number of augmentations to apply.
-        rng: Random number generator.
-
-    Returns:
-        Degraded image matching clinical photo distribution.
-    """
+    """Apply random clinical degradation augmentations to an image."""
     rng = rng or np.random.default_rng()
 
     # Select augmentations by probability

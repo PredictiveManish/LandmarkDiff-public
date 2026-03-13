@@ -64,7 +64,7 @@ def process_single_image(
         #
         # At inference time, we feed the MANIPULATED mesh as conditioning,
         # and the model generates a realistic face matching that structure.
-        # This way the model always generates realistic faces — never TPS artifacts.
+        # This way the model always generates realistic faces - never TPS artifacts.
         #
         # We also save the manipulated mesh for inference-time use.
         input_path = out / f"{pair_idx:06d}_{procedure}_input.png"

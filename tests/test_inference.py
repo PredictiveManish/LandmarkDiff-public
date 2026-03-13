@@ -1,4 +1,4 @@
-"""Tests for inference pipeline (structure only — no model download)."""
+"""Inference pipeline tests (no model download)."""
 
 import numpy as np
 import pytest

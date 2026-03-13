@@ -224,7 +224,7 @@ def build_app():
     import gradio as gr
 
     with gr.Blocks(
-        title="LandmarkDiff — Surgical Outcome Prediction",
+        title="LandmarkDiff - Surgical Outcome Prediction",
         theme=gr.themes.Soft(),
         css=".side-by-side img { max-height: 300px; }",
     ) as app:
@@ -437,7 +437,7 @@ def build_app():
             gr.Markdown(
                 "## Guided Multi-Angle Face Capture\n"
                 "Upload photos from multiple angles for more accurate 3D-aware prediction.\n"
-                "Follow the guide: **front → left 45° → right 45° → left profile → right profile**.\n\n"
+                "Follow the guide: **front -> left 45° -> right 45° -> left profile -> right profile**.\n\n"
                 "The system validates each angle using landmark-based pose estimation "
                 "and combines all views for the final result."
             )
@@ -475,7 +475,7 @@ def build_app():
                     with gr.Row():
                         ma_out_left_prof = gr.Image(label="Left Profile Result", height=200)
                         ma_out_right_prof = gr.Image(label="Right Profile Result", height=200)
-                    ma_gallery = gr.Gallery(label="All Views (Before → After)", columns=5, height=250)
+                    ma_gallery = gr.Gallery(label="All Views (Before -> After)", columns=5, height=250)
 
             def _validate_angle(image_rgb, expected_view, label):
                 """Validate a single image's face angle matches expected view."""

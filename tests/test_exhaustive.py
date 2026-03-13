@@ -1,7 +1,5 @@
-"""Exhaustive test suite for LandmarkDiff — DIRAC verification.
-
-Covers every function, every edge case, every branch across all modules.
-Target: 1000+ individual test cases via parameterization.
+"""Exhaustive tests - every function, every edge case.
+Heavy parameterization, targeting 1000+ test cases.
 """
 
 import math
@@ -124,7 +122,7 @@ def rng():
 
 
 def _make_face(w=512, h=512, seed=0):
-    """Create a synthetic FaceLandmarks with realistic normalized coordinates."""
+    """Fake face with random coords."""
     rng = np.random.default_rng(seed)
     landmarks = rng.uniform(0.1, 0.9, size=(478, 3)).astype(np.float32)
     # Make landmarks roughly centered like a face
@@ -298,7 +296,7 @@ class TestRegionColors:
             assert 0 <= c <= 255
 
     def test_face_oval_has_no_matching_region(self):
-        """face_oval is in REGION_COLORS but NOT in LANDMARK_REGIONS — dead data."""
+        """face_oval is in REGION_COLORS but NOT in LANDMARK_REGIONS - dead data."""
         assert "face_oval" in REGION_COLORS
         assert "face_oval" not in LANDMARK_REGIONS
 
@@ -933,7 +931,7 @@ class TestMaskComposite:
         mask[:256, :] = 1.0  # top half
         # use_laplacian=False for predictable alpha blending behavior
         result = mask_composite(warped, sample_image, mask, use_laplacian=False)
-        # Bottom half should be original (mask=0 → 100% original)
+        # Bottom half should be original (mask=0 -> 100% original)
         np.testing.assert_array_equal(result[256:, :], sample_image[256:, :])
 
 
@@ -956,7 +954,7 @@ class TestMatchSkinTone:
 
 class TestPoissonBlend:
     def test_delegates_to_mask_composite(self, sample_image):
-        """poisson_blend is dead code — just calls mask_composite."""
+        """poisson_blend is dead code - just calls mask_composite."""
         mask = np.zeros((512, 512), dtype=np.float32)
         result = poisson_blend(sample_image, sample_image, mask)
         expected = mask_composite(sample_image, sample_image, mask)
@@ -1018,7 +1016,7 @@ class TestEstimateFaceView:
         landmarks[152] = [0.8, 0.9, 0.0]  # chin
         f = FaceLandmarks(landmarks=landmarks, image_width=512, image_height=512, confidence=1.0)
         view = estimate_face_view(f)
-        # nose-to-left_ear >> nose-to-right_ear → strong yaw
+        # nose-to-left_ear >> nose-to-right_ear -> strong yaw
         assert abs(view["yaw"]) > 15 or view["view"] != "frontal"
 
 
@@ -1882,7 +1880,7 @@ class TestJpegCompression:
 
     def test_modifies_image(self, sample_image_small, rng):
         result = jpeg_compression(sample_image_small, rng)
-        # JPEG is lossy — should differ
+        # JPEG is lossy - should differ
         assert not np.array_equal(result, sample_image_small)
 
 
@@ -2233,7 +2231,7 @@ class TestMotionBlurEdgeCases:
 
 
 class TestMaskingSeedIssue:
-    """Test masking noise behavior — uses unseeded default_rng()."""
+    """Test masking noise behavior - uses unseeded default_rng()."""
 
     def test_different_noise_across_calls(self, face):
         """Masks use np.random.default_rng() (unseeded) so noise differs each call."""
@@ -2265,7 +2263,7 @@ class TestIdentityLossZeroEmbedding:
         assert torch.all(torch.isfinite(normalized))
 
     def test_cosine_sim_with_zero_embedding_is_zero(self):
-        """Zero embedding → cosine similarity = 0 (handled by valid_mask in IdentityLoss)."""
+        """Zero embedding -> cosine similarity = 0 (handled by valid_mask in IdentityLoss)."""
         good = F.normalize(torch.randn(1, 512), dim=1)
         bad = F.normalize(torch.zeros(1, 512), dim=1)  # stays zero
         sim = (good * bad).sum(dim=1)
@@ -2285,7 +2283,7 @@ class TestPerceptualLossMaskingBug:
     """Test the masking order bug in PerceptualLoss."""
 
     def test_masked_pixels_become_minus_one(self):
-        """BUG: masked pixels → 0 → *2-1 → -1, not ignored."""
+        """BUG: masked pixels -> 0 -> *2-1 -> -1, not ignored."""
         pred = torch.rand(1, 3, 64, 64)
         outside_mask = torch.zeros(1, 1, 64, 64)  # surgical mask covers everything
         pred_masked = pred * outside_mask  # all zeros

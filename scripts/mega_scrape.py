@@ -156,7 +156,7 @@ def img_hash(url: str) -> str:
 
 
 # ============================================================
-# SOURCE 1: REALSELF (Selenium — JS rendered)
+# SOURCE 1: REALSELF (Selenium - JS rendered)
 # ============================================================
 
 def scrape_realself(proc: str, slug: str, output_dir: Path, max_pages: int = 200) -> int:
@@ -243,7 +243,7 @@ def scrape_realself(proc: str, slug: str, output_dir: Path, max_pages: int = 200
 
 
 # ============================================================
-# SOURCE 2: REDDIT (via old.reddit.com — works without JS)
+# SOURCE 2: REDDIT (via old.reddit.com - works without JS)
 # ============================================================
 
 def scrape_reddit(proc: str, config: dict, output_dir: Path) -> int:
@@ -545,7 +545,7 @@ def scrape_clinic_galleries(proc: str, output_dir: Path) -> int:
 
 
 # ============================================================
-# SOURCE 6: SEARCH ENGINES (icrawler — Bing, Google, Baidu)
+# SOURCE 6: SEARCH ENGINES (icrawler - Bing, Google, Baidu)
 # ============================================================
 
 def search_engine_crawl(proc: str, search_terms: list[str], output_dir: Path, target: int = 50000) -> int:
@@ -618,7 +618,7 @@ def search_engine_crawl(proc: str, search_terms: list[str], output_dir: Path, ta
             pass
         time.sleep(0.2)
 
-    # Google (secondary — stricter rate limits)
+    # Google (secondary - stricter rate limits)
     for i, query in enumerate(unique_queries[:100]):
         current = len(list(output_dir.glob("*")))
         if current >= target:

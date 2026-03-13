@@ -1,5 +1,5 @@
 #!/bin/bash
-# LandmarkDiff Local Demo — runs entirely on Mac M3 Pro
+# LandmarkDiff Local Demo - runs entirely on Mac M3 Pro
 # Downloads a sample face, runs full pipeline, shows results
 set -e
 

@@ -134,7 +134,7 @@ def run_synthetic_demo(output_dir: str = "scripts/demo_output") -> None:
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    print("No image provided — running synthetic landmark demo...")
+    print("No image provided - running synthetic landmark demo...")
     print()
 
     # Create synthetic face landmarks (rough oval face shape)

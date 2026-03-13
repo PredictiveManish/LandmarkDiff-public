@@ -5,7 +5,7 @@ Pipeline:
 2. Split into before/after halves (auto-detect layout)
 3. Validate faces detected in both halves (MediaPipe)
 4. Extract landmarks from both, compute displacement vectors
-5. Save as training pairs (before_mesh → after_face) for ControlNet
+5. Save as training pairs (before_mesh -> after_face) for ControlNet
 6. Build displacement statistics per procedure
 """
 
@@ -32,7 +32,7 @@ def split_comparison_image(img: np.ndarray) -> list[tuple[np.ndarray, np.ndarray
 
     aspect = w / h
 
-    # Strategy 1: Horizontal split (side by side) — most common
+    # Strategy 1: Horizontal split (side by side) - most common
     if aspect > 1.2:
         mid = w // 2
         gap = max(2, w // 100)

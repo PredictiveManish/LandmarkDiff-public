@@ -88,7 +88,7 @@ def main():
         del finetuned
         torch.cuda.empty_cache()
 
-    # 3. Early checkpoint (10K steps — less fine-tuning)
+    # 3. Early checkpoint (10K steps - less fine-tuning)
     early_path = Path("checkpoints_v2/checkpoint-10000/controlnet_ema")
     if early_path.exists():
         print("Loading early checkpoint (10K)...")

@@ -74,7 +74,7 @@ def split_comparison_image(img: np.ndarray) -> Optional[tuple[np.ndarray, np.nda
     mid_x = w // 2
     strip_w = max(4, w // 50)
 
-    # Check horizontal split (side by side) — most common
+    # Check horizontal split (side by side) - most common
     left_half = img[:, :mid_x - strip_w]
     right_half = img[:, mid_x + strip_w:]
 
@@ -88,7 +88,7 @@ def split_comparison_image(img: np.ndarray) -> Optional[tuple[np.ndarray, np.nda
     aspect = w / h
 
     if aspect > 1.5:
-        # Wide image → likely side-by-side
+        # Wide image -> likely side-by-side
         # Resize both halves to same size
         target_h = min(left_half.shape[0], right_half.shape[0])
         target_w = min(left_half.shape[1], right_half.shape[1])
@@ -96,14 +96,14 @@ def split_comparison_image(img: np.ndarray) -> Optional[tuple[np.ndarray, np.nda
         after = cv2.resize(right_half, (target_w, target_h))
         return before, after
     elif aspect < 0.7:
-        # Tall image → likely top/bottom
+        # Tall image -> likely top/bottom
         target_h = min(top_half.shape[0], bottom_half.shape[0])
         target_w = min(top_half.shape[1], bottom_half.shape[1])
         before = cv2.resize(top_half, (target_w, target_h))
         after = cv2.resize(bottom_half, (target_w, target_h))
         return before, after
     else:
-        # Square-ish → try both, pick the one where both halves have faces
+        # Square-ish -> try both, pick the one where both halves have faces
         # Default to horizontal split
         target_w = min(left_half.shape[1], right_half.shape[1])
         target_h = min(left_half.shape[0], right_half.shape[0])

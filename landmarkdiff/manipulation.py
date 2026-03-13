@@ -1,10 +1,8 @@
-"""Landmark manipulation engine with Free-Form Deformation (FFD/RBF).
+"""Landmark manipulation via Gaussian RBF deformation.
 
-All v1/v2 UI uses RELATIVE sliders (0-100 intensity).
-Millimeter inputs exist only in v3+ with FLAME calibrated metric space.
+v1/v2 uses relative sliders (0-100 intensity).
+mm inputs only in v3+ with FLAME calibrated metric space.
 """
-
-from __future__ import annotations
 
 from __future__ import annotations
 
@@ -21,7 +19,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class DeformationHandle:
-    """A control handle for FFD manipulation."""
+    """Single deformation control point."""
 
     landmark_index: int
     displacement: np.ndarray  # (2,) or (3,) pixel displacement
@@ -65,17 +63,7 @@ def gaussian_rbf_deform(
     landmarks: np.ndarray,
     handle: DeformationHandle,
 ) -> np.ndarray:
-    """Apply Gaussian RBF deformation around a control handle.
-
-    Formula: delta_p_i = delta_handle * exp(-||p_i - p_handle||^2 / (2 * r^2))
-
-    Args:
-        landmarks: (N, 2) or (N, 3) landmark coordinates in pixels.
-        handle: Control handle specifying index, displacement, and radius.
-
-    Returns:
-        New landmark array with deformation applied (immutable — returns copy).
-    """
+    """Gaussian RBF deform: delta * exp(-dist^2 / 2r^2). Returns copy."""
     result = landmarks.copy()
     center = landmarks[handle.landmark_index, :2]
     displacement = handle.displacement[:2]
@@ -99,18 +87,7 @@ def apply_procedure_preset(
     image_size: int = 512,
     clinical_flags: Optional["ClinicalFlags"] = None,
 ) -> FaceLandmarks:
-    """Apply a surgical procedure preset to landmarks.
-
-    Args:
-        face: Input face landmarks.
-        procedure: One of 'rhinoplasty', 'blepharoplasty', 'rhytidectomy', 'orthognathic'.
-        intensity: Relative intensity 0-100 (mild=33, moderate=66, aggressive=100).
-        image_size: Reference image size for displacement scaling.
-        clinical_flags: Optional clinical condition flags.
-
-    Returns:
-        New FaceLandmarks with manipulated landmarks.
-    """
+    """Apply a named procedure preset at given intensity (0-100)."""
     if procedure not in PROCEDURE_LANDMARKS:
         raise ValueError(f"Unknown procedure: {procedure}. Choose from {list(PROCEDURE_LANDMARKS)}")
 
@@ -163,17 +140,12 @@ def _get_procedure_handles(
     scale: float,
     radius: float,
 ) -> list[DeformationHandle]:
-    """Generate anatomically-grounded deformation handles for a procedure.
-
-    Displacements are in 2D pixel space (X, Y) since the mesh conditioning
-    and TPS warp are both 2D. Values calibrated to look natural at 512x512.
-    Based on anthropometric studies (Singh et al. TIFS 2010).
-    """
+    """Build deformation handles per procedure. 2D pixel displacements, calibrated at 512x512."""
     handles = []
 
     if procedure == "rhinoplasty":
         # --- Alar base narrowing: move nostrils inward (toward midline) ---
-        # Left nostril landmarks → move RIGHT (+X)
+        # left nostril -> move RIGHT (+X)
         left_alar = [240, 236, 141, 363, 370]
         for idx in left_alar:
             if idx in indices:
@@ -182,7 +154,7 @@ def _get_procedure_handles(
                     displacement=np.array([2.5 * scale, 0.0]),
                     influence_radius=radius * 0.6,
                 ))
-        # Right nostril landmarks → move LEFT (-X)
+        # right nostril -> move LEFT (-X)
         right_alar = [460, 456, 274, 275, 278, 279]
         for idx in right_alar:
             if idx in indices:

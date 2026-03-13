@@ -1,7 +1,7 @@
 """Scrape real before/after surgical images from public sources.
 
 Sources:
-1. Open-i (NLM/NIH open medical image search) — CC-licensed
+1. Open-i (NLM/NIH open medical image search) - CC-licensed
 2. PubMed Central open-access figures
 3. Public plastic surgery research datasets
 

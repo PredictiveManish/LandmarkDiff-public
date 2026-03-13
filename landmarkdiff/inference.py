@@ -1,12 +1,12 @@
 """Inference pipeline for surgical outcome prediction.
 
-Four modes:
-1. ControlNet: CrucibleAI/ControlNetMediaPipeFace + SD1.5 (requires HF auth + GPU)
-2. ControlNet + IP-Adapter: ControlNet with identity preservation via face embeddings
-3. Img2Img: SD1.5 img2img with mask compositing (runs on MPS, no auth needed)
-4. TPS-only: Pure geometric warp — no diffusion model, instant results
+Modes:
+1. ControlNet: CrucibleAI/ControlNetMediaPipeFace + SD1.5 (HF auth + GPU)
+2. ControlNet + IP-Adapter: ControlNet w/ identity preservation
+3. Img2Img: SD1.5 img2img with mask compositing (MPS ok, no auth)
+4. TPS-only: geometric warp, no diffusion, instant
 
-Supports MPS (Apple Silicon), CUDA, and CPU backends.
+Works on MPS (Apple Silicon), CUDA, and CPU.
 """
 
 from __future__ import annotations
@@ -86,12 +86,7 @@ def mask_composite(
     mask: np.ndarray,
     use_laplacian: bool = True,
 ) -> np.ndarray:
-    """Composite warped image into original using ONLY the mask region.
-
-    Uses Laplacian pyramid blending by default for seamless transitions.
-    Falls back to simple alpha blend if Laplacian unavailable.
-    Matches skin tone in LAB space to prevent any color shift.
-    """
+    """Blend warped region into original via Laplacian pyramid + LAB skin-tone match."""
     mask_f = mask.astype(np.float32)
     if mask_f.max() > 1.0:
         mask_f = mask_f / 255.0
@@ -117,11 +112,7 @@ def mask_composite(
 
 
 def _match_skin_tone(source: np.ndarray, target: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """Match source skin tone to target within mask, preserving structure.
-
-    Works in LAB space: transfers L (luminance) and AB (color) statistics
-    from the original to the warped image so skin tone is preserved exactly.
-    """
+    """LAB-space color transfer so warped region matches original skin tone."""
     mask_bool = mask > 0.3
     if not np.any(mask_bool):
         return source
@@ -129,7 +120,7 @@ def _match_skin_tone(source: np.ndarray, target: np.ndarray, mask: np.ndarray) -
     src_lab = cv2.cvtColor(source, cv2.COLOR_BGR2LAB).astype(np.float32)
     tgt_lab = cv2.cvtColor(target, cv2.COLOR_BGR2LAB).astype(np.float32)
 
-    # Match each LAB channel's statistics in the mask region
+    # match per-channel stats in masked region
     for ch in range(3):
         src_vals = src_lab[:, :, ch][mask_bool]
         tgt_vals = tgt_lab[:, :, ch][mask_bool]
@@ -137,7 +128,7 @@ def _match_skin_tone(source: np.ndarray, target: np.ndarray, mask: np.ndarray) -
         src_mean, src_std = np.mean(src_vals), np.std(src_vals) + 1e-6
         tgt_mean, tgt_std = np.mean(tgt_vals), np.std(tgt_vals) + 1e-6
 
-        # Normalize source to match target's distribution
+        # shift+scale to match target distribution
         src_lab[:, :, ch] = np.where(
             mask_bool,
             (src_lab[:, :, ch] - src_mean) * (tgt_std / src_std) + tgt_mean,
@@ -149,23 +140,12 @@ def _match_skin_tone(source: np.ndarray, target: np.ndarray, mask: np.ndarray) -
 
 
 def poisson_blend(source: np.ndarray, target: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """Seamless clone source into target using Poisson blending.
-
-    Falls back to mask_composite if Poisson fails or produces artifacts.
-    """
-    # Use mask_composite — more reliable, preserves skin tone
+    """Poisson blend - just delegates to mask_composite (more reliable)."""
     return mask_composite(source, target, mask)
 
 
 class LandmarkDiffPipeline:
-    """End-to-end pipeline: image -> landmarks -> manipulate -> generate.
-
-    Modes:
-    - 'controlnet': CrucibleAI/ControlNetMediaPipeFace + SD1.5
-    - 'controlnet_ip': ControlNet + IP-Adapter for identity preservation
-    - 'img2img': SD1.5 img2img with mask compositing
-    - 'tps': Pure geometric TPS warp (no diffusion, instant)
-    """
+    """Image -> landmarks -> manipulate -> generate."""
 
     # Default IP-Adapter model for SD1.5 face identity
     IP_ADAPTER_REPO = "h94/IP-Adapter"
@@ -208,7 +188,7 @@ class LandmarkDiffPipeline:
 
     def load(self) -> None:
         if self.mode == "tps":
-            print("TPS mode — no model to load")
+            print("TPS mode - no model to load")
             return
         if self.mode in ("controlnet", "controlnet_ip"):
             self._load_controlnet()
@@ -236,23 +216,19 @@ class LandmarkDiffPipeline:
             safety_checker=None,
             requires_safety_checker=False,
         )
-        # DPM++ 2M Karras — produces more photorealistic output than UniPC
+        # DPM++ 2M Karras - better skin than UniPC
         self._pipe.scheduler = DPMSolverMultistepScheduler.from_config(
             self._pipe.scheduler.config,
             algorithm_type="dpmsolver++",
             use_karras_sigmas=True,
         )
-        # FP32 VAE decode — prevents color banding artifacts on skin tones
+        # FP32 VAE decode - prevents color banding on skin
         if hasattr(self._pipe, "vae") and self._pipe.vae is not None:
             self._pipe.vae.config.force_upcast = True
         self._apply_device_optimizations()
 
     def _load_ip_adapter(self) -> None:
-        """Load IP-Adapter for identity-preserving generation.
-
-        Uses h94/IP-Adapter-FaceID with CLIP image encoder to condition
-        generation on the input face identity.
-        """
+        """Load IP-Adapter for identity preservation."""
         if self._pipe is None:
             raise RuntimeError("Base pipeline must be loaded before IP-Adapter")
         try:
@@ -329,7 +305,7 @@ class LandmarkDiffPipeline:
         if face is None:
             raise ValueError("No face detected in image.")
 
-        # Estimate face view angle for multi-view awareness
+        # face view angle for multi-view awareness
         view_info = estimate_face_view(face)
 
         manipulated = apply_procedure_preset(
@@ -346,7 +322,7 @@ class LandmarkDiffPipeline:
 
         prompt = PROCEDURE_PROMPTS.get(procedure, "a photo of a person's face")
 
-        # Step 1: TPS geometric warp (always computed — the geometric baseline)
+        # TPS warp is always the geometric baseline
         tps_warped = warp_image_tps(image_512, face.pixel_coords, manipulated.pixel_coords)
 
         if self.mode == "tps":
@@ -364,7 +340,7 @@ class LandmarkDiffPipeline:
                 guidance_scale, strength, generator,
             )
 
-        # Step 2: Post-processing for photorealism (neural + classical pipeline)
+        # postprocess for photorealism
         identity_check = None
         restore_used = "none"
         if postprocess and self.mode != "tps":
@@ -442,13 +418,7 @@ class LandmarkDiffPipeline:
 
 
 def estimate_face_view(face: FaceLandmarks) -> dict:
-    """Estimate face orientation from landmarks for multi-view awareness.
-
-    Uses the nose tip (idx 1), left ear (idx 234), and right ear (idx 454) to
-    estimate yaw angle. Pitch from forehead (idx 10) and chin (idx 152).
-
-    Returns dict with yaw, pitch (degrees), and view classification.
-    """
+    """Yaw/pitch from nose-ear and forehead-chin distances. Returns view dict."""
     coords = face.pixel_coords
     nose_tip = coords[1]
     left_ear = coords[234]

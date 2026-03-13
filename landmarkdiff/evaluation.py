@@ -1,8 +1,6 @@
-"""Evaluation metrics suite.
+"""Evaluation metrics: FID, LPIPS, NME, ArcFace sim, SSIM.
 
-All metrics stratified by Fitzpatrick skin type (I-VI) using ITA-based thresholding.
-Primary metrics: FID, LPIPS, NME, ArcFace identity similarity.
-Secondary: SSIM (relaxed target >0.80).
+Stratified by Fitzpatrick skin type (I-VI) via ITA thresholding.
 """
 
 from __future__ import annotations
@@ -92,19 +90,7 @@ class EvalMetrics:
 
 
 def classify_fitzpatrick_ita(image: np.ndarray) -> str:
-    """Classify Fitzpatrick skin type using Individual Typology Angle (ITA).
-
-    ITA = arctan((L - 50) / b) * (180 / pi)
-    where L, b are from CIE L*a*b* color space.
-
-    Thresholds from Chardon et al. (1991):
-    - ITA > 55: Type I (very light)
-    - 41 < ITA <= 55: Type II (light)
-    - 28 < ITA <= 41: Type III (intermediate)
-    - 10 < ITA <= 28: Type IV (tan)
-    - -30 < ITA <= 10: Type V (brown)
-    - ITA <= -30: Type VI (dark)
-    """
+    """Fitzpatrick I-VI from ITA angle (Chardon et al. 1991 thresholds)."""
     if cv2 is None:
         raise ImportError("opencv-python is required for Fitzpatrick classification")
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.float32)
@@ -141,19 +127,7 @@ def compute_nme(
     left_eye_idx: int = 33,
     right_eye_idx: int = 263,
 ) -> float:
-    """Compute Normalized Mean Error for landmarks.
-
-    Normalized by inter-ocular distance.
-
-    Args:
-        pred_landmarks: (N, 2) predicted landmark positions.
-        target_landmarks: (N, 2) ground truth positions.
-        left_eye_idx: MediaPipe index for left eye center.
-        right_eye_idx: MediaPipe index for right eye center.
-
-    Returns:
-        NME value (lower is better).
-    """
+    """Compute Normalized Mean Error for landmarks."""
     iod = np.linalg.norm(
         target_landmarks[left_eye_idx] - target_landmarks[right_eye_idx]
     )
@@ -168,11 +142,7 @@ def compute_ssim(
     pred: np.ndarray,
     target: np.ndarray,
 ) -> float:
-    """Compute Structural Similarity Index (SSIM).
-
-    Uses scikit-image's windowed SSIM (Wang et al. 2004) for proper
-    per-window computation with 11x11 Gaussian kernel.
-    """
+    """SSIM via skimage, falls back to global SSIM if not installed."""
     try:
         from skimage.metrics import structural_similarity
         # Convert to grayscale if color, or compute per-channel
@@ -219,10 +189,7 @@ def compute_lpips(
     pred: np.ndarray,
     target: np.ndarray,
 ) -> float:
-    """Compute LPIPS perceptual distance between two images.
-
-    Returns LPIPS score (lower = more similar).
-    """
+    """LPIPS perceptual distance (lower = more similar)."""
     try:
         import lpips
         import torch
@@ -244,17 +211,7 @@ def compute_fid(
     real_dir: str,
     generated_dir: str,
 ) -> float:
-    """Compute FID between directories of real and generated images.
-
-    Uses torch-fidelity for GPU-accelerated computation.
-
-    Args:
-        real_dir: Path to directory of real images.
-        generated_dir: Path to directory of generated images.
-
-    Returns:
-        FID score (lower = more similar distributions).
-    """
+    """Compute FID between directories of real and generated images."""
     try:
         from torch_fidelity import calculate_metrics
     except ImportError:
@@ -317,21 +274,7 @@ def evaluate_batch(
     procedures: list[str] | None = None,
     compute_identity: bool = False,
 ) -> EvalMetrics:
-    """Evaluate a batch of predicted vs target images.
-
-    Computes all metrics and stratifies by Fitzpatrick skin type and procedure.
-
-    Args:
-        predictions: List of predicted BGR images.
-        targets: List of target BGR images.
-        pred_landmarks: Optional list of (N, 2) predicted landmark arrays.
-        target_landmarks: Optional list of (N, 2) target landmark arrays.
-        procedures: Optional list of procedure names for per-procedure breakdown.
-        compute_identity: Whether to compute ArcFace identity similarity (slow).
-
-    Returns:
-        EvalMetrics with all computed values.
-    """
+    """Evaluate a batch of predicted vs target images."""
     n = len(predictions)
     ssim_scores = []
     lpips_scores = []

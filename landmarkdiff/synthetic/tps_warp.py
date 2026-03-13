@@ -1,8 +1,7 @@
-"""Thin-Plate Spline warping for synthetic training pair generation.
+"""TPS warping for synthetic pair generation.
 
-Applies TPS warp ONLY to deformable tissue regions. Rigid structures
-(teeth, sclera) are rigidly translated, not warped. This prevents
-the "rubber teeth" artifact from naive TPS.
+Only warps deformable tissue - rigid structures (teeth, sclera) get
+rigid translation instead. Prevents "rubber teeth" from naive TPS.
 """
 
 from __future__ import annotations
@@ -15,15 +14,7 @@ def compute_tps_transform(
     src_pts: np.ndarray,
     dst_pts: np.ndarray,
 ) -> cv2.ThinPlateSplineShapeTransformer:
-    """Compute a TPS transform from source to destination point pairs.
-
-    Args:
-        src_pts: (N, 2) source control points.
-        dst_pts: (N, 2) destination control points.
-
-    Returns:
-        Fitted TPS transformer.
-    """
+    """Fit a TPS transform from src to dst points."""
     src = src_pts.reshape(1, -1, 2).astype(np.float32)
     dst = dst_pts.reshape(1, -1, 2).astype(np.float32)
     matches = [cv2.DMatch(i, i, 0) for i in range(len(src_pts))]
@@ -39,12 +30,7 @@ def _subsample_control_points(
     max_points: int = 80,
     anchor_stride: int = 8,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Subsample control points for faster TPS: all displaced + sparse anchors.
-
-    With 478 MediaPipe landmarks, full TPS requires solving a 481x481 system
-    and evaluating 478 RBFs at each pixel — very slow. Subsampling to ~80
-    points gives nearly identical results ~30x faster.
-    """
+    """Keep all displaced points + sparse anchors. ~80 pts instead of 478, ~30x faster."""
     displacements = np.linalg.norm(dst - src, axis=1)
     displaced_mask = displacements > 0.5  # moved by > 0.5px
     displaced_idx = np.where(displaced_mask)[0]
@@ -75,18 +61,7 @@ def warp_image_tps(
     dst_landmarks: np.ndarray,
     rigid_mask: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Apply TPS warp to an image with optional rigid region preservation.
-
-    Args:
-        image: BGR input image.
-        src_landmarks: (N, 2) original landmark pixel coords.
-        dst_landmarks: (N, 2) target landmark pixel coords.
-        rigid_mask: Optional binary mask of rigid regions (teeth, sclera).
-                    These regions are rigidly translated, not TPS-warped.
-
-    Returns:
-        Warped image.
-    """
+    """Apply TPS warp to an image with optional rigid region preservation."""
     h, w = image.shape[:2]
 
     src_pts = src_landmarks.astype(np.float32)
@@ -290,17 +265,7 @@ def generate_random_warp(
     max_displacement: float = 15.0,
     rng: np.random.Generator | None = None,
 ) -> np.ndarray:
-    """Generate randomly warped landmarks for synthetic data.
-
-    Args:
-        landmarks: (N, 2) pixel coordinates.
-        procedure_indices: Which landmarks to warp.
-        max_displacement: Max pixel displacement.
-        rng: Random number generator.
-
-    Returns:
-        New landmark array with random deformations.
-    """
+    """Generate randomly warped landmarks for synthetic data."""
     rng = rng or np.random.default_rng()
     result = landmarks.copy()
 

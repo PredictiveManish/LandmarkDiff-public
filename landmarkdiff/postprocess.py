@@ -1,15 +1,5 @@
-"""Post-processing pipeline for photorealistic face output.
-
-Neural net components:
-- CodeFormer (primary): face restoration with controllable fidelity-quality tradeoff
-- GFPGAN (fallback): face restoration for diffusion artifact repair
-- Real-ESRGAN: neural super-resolution for background regions
-- ArcFace: identity verification to flag drift between input/output
-
-Classical components:
-- Multi-band Laplacian pyramid blending (replaces simple alpha blend)
-- Frequency-aware sharpening (recovers fine skin texture)
-- Color histogram matching (ensures skin tone consistency)
+"""Post-processing: CodeFormer/GFPGAN face restore, Real-ESRGAN bg,
+Laplacian blend, sharpening, histogram matching, ArcFace identity gate.
 """
 
 from __future__ import annotations
@@ -24,22 +14,7 @@ def laplacian_pyramid_blend(
     mask: np.ndarray,
     levels: int = 6,
 ) -> np.ndarray:
-    """Multi-band Laplacian pyramid blending for seamless compositing.
-
-    Unlike simple alpha blending which creates visible halos at mask edges,
-    Laplacian blending operates at multiple frequency bands. Low frequencies
-    (overall color/lighting) blend smoothly, high frequencies (skin texture,
-    pores, hair) transition sharply. This eliminates the "pasted on" look.
-
-    Args:
-        source: BGR image to blend IN (the surgical result).
-        target: BGR image to blend INTO (the original photo).
-        mask: Float32 mask [0-1] (1 = source region).
-        levels: Number of pyramid levels (6 works well for 512x512).
-
-    Returns:
-        Seamlessly composited BGR image.
-    """
+    """Laplacian pyramid blend - kills the 'pasted on' look from alpha blending."""
     # Ensure same size
     h, w = target.shape[:2]
     source = cv2.resize(source, (w, h)) if source.shape[:2] != (h, w) else source
@@ -132,20 +107,7 @@ def frequency_aware_sharpen(
     strength: float = 0.3,
     radius: int = 3,
 ) -> np.ndarray:
-    """Sharpen high-frequency detail (skin texture, pores) without amplifying noise.
-
-    Uses unsharp masking in LAB space (luminance only) to avoid
-    color fringing. Preserves the smooth look of diffusion output
-    while recovering fine texture detail.
-
-    Args:
-        image: BGR image.
-        strength: Sharpening strength (0.2-0.5 typical for faces).
-        radius: Gaussian blur radius for unsharp mask.
-
-    Returns:
-        Sharpened BGR image.
-    """
+    """Unsharp mask on LAB luminance only - sharpens skin texture without color fringe."""
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.float32)
     l_channel = lab[:, :, 0]
 
@@ -162,19 +124,7 @@ def restore_face_gfpgan(
     image: np.ndarray,
     upscale: int = 1,
 ) -> np.ndarray:
-    """Restore face quality using GFPGAN.
-
-    Fixes common diffusion artifacts: blurry eyes, distorted features,
-    inconsistent skin texture. The restored face is then blended back
-    into the original for a natural look.
-
-    Args:
-        image: BGR face image (any size).
-        upscale: Upscale factor (1 = same size, 2 = 2x).
-
-    Returns:
-        Restored BGR image, or original if GFPGAN unavailable.
-    """
+    """GFPGAN face restore. Returns original if not installed."""
     try:
         from gfpgan import GFPGANer
     except ImportError:
@@ -207,21 +157,7 @@ def restore_face_codeformer(
     fidelity: float = 0.7,
     upscale: int = 1,
 ) -> np.ndarray:
-    """Restore face quality using CodeFormer (neural net).
-
-    CodeFormer uses a Transformer-based codebook lookup to restore degraded
-    faces. The fidelity parameter controls the quality-fidelity tradeoff:
-    lower values produce higher quality but may alter identity slightly,
-    higher values preserve identity but fix fewer artifacts.
-
-    Args:
-        image: BGR face image.
-        fidelity: Quality-fidelity balance (0.0=quality, 1.0=fidelity). 0.7 default.
-        upscale: Upscale factor (1 = same size).
-
-    Returns:
-        Restored BGR image, or original if CodeFormer unavailable.
-    """
+    """CodeFormer face restore. fidelity: 0=quality, 1=identity. Returns original if not installed."""
     try:
         from codeformer.basicsr.utils import img2tensor, tensor2img
         from codeformer.facelib.utils.face_restoration_helper import FaceRestoreHelper
@@ -289,19 +225,7 @@ def enhance_background_realesrgan(
     mask: np.ndarray,
     outscale: int = 2,
 ) -> np.ndarray:
-    """Enhance non-face background regions using Real-ESRGAN neural upscaler.
-
-    Only applies to regions outside the surgical mask to improve overall
-    image quality without interfering with the face restoration pipeline.
-
-    Args:
-        image: BGR image.
-        mask: Float32 mask [0-1] where 1 = face region (skip these pixels).
-        outscale: Upscale factor (2 = 2x resolution, then downsample back).
-
-    Returns:
-        Enhanced BGR image at original resolution.
-    """
+    """Real-ESRGAN on background only (outside mask). Returns original if not installed."""
     try:
         from realesrgan import RealESRGANer
         from basicsr.archs.rrdbnet_arch import RRDBNet
@@ -352,28 +276,14 @@ def verify_identity_arcface(
     result: np.ndarray,
     threshold: float = 0.6,
 ) -> dict:
-    """Verify output preserves input identity using ArcFace neural net.
-
-    Computes cosine similarity between ArcFace embeddings of the original
-    and result images. If similarity drops below threshold, flags identity
-    drift — meaning the postprocessing or diffusion altered the person's
-    appearance too much.
-
-    Args:
-        original: BGR original face image.
-        result: BGR post-processed output image.
-        threshold: Minimum cosine similarity to pass (0.6 = same person).
-
-    Returns:
-        Dict with 'similarity' (float), 'passed' (bool), 'message' (str).
-    """
+    """ArcFace cosine similarity check. Flags if output drifted from input identity."""
     try:
         from insightface.app import FaceAnalysis
     except ImportError:
         return {
             "similarity": -1.0,
             "passed": True,
-            "message": "InsightFace not installed — identity check skipped",
+            "message": "InsightFace not installed - identity check skipped",
         }
 
     try:
@@ -390,7 +300,7 @@ def verify_identity_arcface(
             return {
                 "similarity": -1.0,
                 "passed": True,
-                "message": "Could not detect face in one/both images — check skipped",
+                "message": "Could not detect face in one/both images - check skipped",
             }
 
         orig_emb = orig_faces[0].embedding
@@ -429,19 +339,7 @@ def histogram_match_skin(
     reference: np.ndarray,
     mask: np.ndarray,
 ) -> np.ndarray:
-    """Match skin color histogram of source to reference within masked region.
-
-    More robust than simple mean/std matching — preserves the full
-    distribution of skin tones including highlights and shadows.
-
-    Args:
-        source: BGR image whose skin tone to adjust.
-        reference: BGR image with target skin tone.
-        mask: Float32 mask [0-1] of skin region.
-
-    Returns:
-        Color-matched BGR image.
-    """
+    """CDF-based histogram matching in LAB space. Better than mean/std for skin."""
     mask_bool = mask > 0.3 if mask.dtype == np.float32 else mask > 76
 
     if not np.any(mask_bool):
@@ -493,31 +391,7 @@ def full_postprocess(
     verify_identity: bool = True,
     identity_threshold: float = 0.6,
 ) -> dict:
-    """Full neural net + classical post-processing pipeline for maximum photorealism.
-
-    Pipeline:
-    1. Face restoration: CodeFormer (primary) or GFPGAN (fallback) neural nets
-    2. Background enhancement: Real-ESRGAN neural upscaler (non-face regions)
-    3. Skin tone histogram matching to original (classical)
-    4. Frequency-aware sharpening for texture recovery (classical)
-    5. Laplacian pyramid blending for seamless compositing (classical)
-    6. ArcFace identity verification (neural net quality gate)
-
-    Args:
-        generated: BGR generated/warped face image.
-        original: BGR original face image.
-        mask: Float32 surgical mask [0-1].
-        restore_mode: 'codeformer', 'gfpgan', or 'none'.
-        codeformer_fidelity: CodeFormer fidelity weight (0=quality, 1=fidelity).
-        use_realesrgan: Apply Real-ESRGAN to background regions.
-        use_laplacian_blend: Use Laplacian blend vs simple alpha blend.
-        sharpen_strength: Texture sharpening amount (0 = none).
-        verify_identity: Run ArcFace identity check at the end.
-        identity_threshold: Min cosine similarity to pass identity check.
-
-    Returns:
-        Dict with 'image' (composited BGR), 'identity_check' (dict), 'restore_used' (str).
-    """
+    """Full pipeline: restore -> bg enhance -> histogram match -> sharpen -> blend -> identity check."""
     result = generated.copy()
     restore_used = "none"
 

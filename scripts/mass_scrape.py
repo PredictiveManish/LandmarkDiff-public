@@ -48,7 +48,7 @@ def hamming_distance(h1: str, h2: str) -> int:
 
 
 # ============================================================
-# QUERY GENERATION — hundreds of variations per procedure
+# QUERY GENERATION - hundreds of variations per procedure
 # ============================================================
 
 def generate_queries(procedure: str) -> list[str]:

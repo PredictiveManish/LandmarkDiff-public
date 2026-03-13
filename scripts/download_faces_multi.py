@@ -1,10 +1,10 @@
 """Download face images from multiple free online datasets.
 
 Sources (no auth required):
-1. CelebA-HQ 256x256 (korexyz/celeba-hq-256x256) — 30K high-quality aligned faces
-2. FFHQ 256x256 (merkol/ffhq-256) — 70K NVIDIA FFHQ faces
-3. FairFace (HuggingFaceM4/FairFace) — 108K diverse demographics
-4. LFW (bitmind/lfw) — 13K labeled faces in the wild
+1. CelebA-HQ 256x256 (korexyz/celeba-hq-256x256) - 30K high-quality aligned faces
+2. FFHQ 256x256 (merkol/ffhq-256) - 70K NVIDIA FFHQ faces
+3. FairFace (HuggingFaceM4/FairFace) - 108K diverse demographics
+4. LFW (bitmind/lfw) - 13K labeled faces in the wild
 
 All resized to 512x512 for ControlNet training.
 """
@@ -83,7 +83,7 @@ def download_dataset(
     try:
         dataset = load_dataset(config["hf_id"], split=config["split"], streaming=True)
     except Exception as e:
-        print(f"  {dataset_name}: FAILED to load — {e}")
+        print(f"  {dataset_name}: FAILED to load - {e}")
         return 0
 
     count = existing

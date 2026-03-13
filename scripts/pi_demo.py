@@ -67,7 +67,7 @@ def resize_sq(img: np.ndarray, size: int) -> np.ndarray:
 
 
 def make_figure_1_pipeline(face: FaceLandmarks, image: np.ndarray, out: Path) -> None:
-    """Figure 1: Pipeline architecture — single face, rhinoplasty."""
+    """Figure 1: Pipeline architecture - single face, rhinoplasty."""
     s = 256
 
     # Original with landmarks
@@ -303,7 +303,7 @@ def make_figure_6_before_after(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="PI Demo — LandmarkDiff results")
+    parser = argparse.ArgumentParser(description="PI Demo - LandmarkDiff results")
     parser.add_argument("--mode", default="tps", choices=["tps", "img2img", "controlnet"])
     parser.add_argument("--output", default="scripts/final_output/pi_demo")
     args = parser.parse_args()

@@ -18,7 +18,7 @@ export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 export WANDB_MODE=offline
 
 # Trap preemption signal -> save checkpoint -> requeue
-trap 'echo "Caught USR1 — saving checkpoint..."; kill -INT $TRAIN_PID; wait $TRAIN_PID; scontrol requeue $SLURM_JOB_ID' USR1
+trap 'echo "Caught USR1 - saving checkpoint..."; kill -INT $TRAIN_PID; wait $TRAIN_PID; scontrol requeue $SLURM_JOB_ID' USR1
 
 WORK_DIR="/path/to/LandmarkDiff"
 DATA_DIR="${WORK_DIR}/data/synthetic_pairs_v2"

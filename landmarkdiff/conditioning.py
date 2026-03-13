@@ -1,8 +1,7 @@
-"""Conditioning signal generation: static adjacency wireframe + auto-Canny.
+"""Conditioning signal: static adjacency wireframe + auto-Canny.
 
-Uses a pre-defined anatomical adjacency matrix (NOT dynamic Delaunay) to prevent
-triangle inversion on drastic landmark displacements. Auto-Canny adapts thresholds
-to skin tone (Fitzpatrick I-VI safe).
+Static adjacency (not Delaunay) to avoid triangle inversion on big displacements.
+Auto-Canny adapts thresholds to skin tone (Fitzpatrick I-VI safe).
 """
 
 from __future__ import annotations
@@ -73,17 +72,7 @@ def render_wireframe(
     height: int | None = None,
     thickness: int = 1,
 ) -> np.ndarray:
-    """Render static anatomical adjacency wireframe on black canvas.
-
-    Args:
-        face: Facial landmarks (normalized coordinates).
-        width: Canvas width.
-        height: Canvas height.
-        thickness: Line thickness in pixels.
-
-    Returns:
-        Grayscale wireframe image.
-    """
+    """Render static anatomical adjacency wireframe on black canvas."""
     w = width or face.image_width
     h = height or face.image_height
     canvas = np.zeros((h, w), dtype=np.uint8)
@@ -103,18 +92,7 @@ def render_wireframe(
 
 
 def auto_canny(image: np.ndarray) -> np.ndarray:
-    """Auto-Canny edge detection with adaptive thresholds.
-
-    Uses median-based thresholds (0.66*median, 1.33*median) instead of
-    hardcoded 50/150 to handle all Fitzpatrick skin types.
-    Post-processes with morphological skeletonization for 1-pixel edges.
-
-    Args:
-        image: Grayscale input image.
-
-    Returns:
-        Binary edge map (uint8, 0 or 255).
-    """
+    """Auto-Canny edge detection with adaptive thresholds."""
     median = np.median(image[image > 0]) if np.any(image > 0) else 128.0
     low = int(max(0, 0.66 * median))
     high = int(min(255, 1.33 * median))
@@ -144,21 +122,7 @@ def generate_conditioning(
     width: int | None = None,
     height: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Generate full conditioning signal for ControlNet.
-
-    Returns three channels per the spec:
-    1. Rendered landmark dots (colored, BGR)
-    2. Canny edge map from static wireframe (grayscale)
-    3. Wireframe rendering (grayscale)
-
-    Args:
-        face: Extracted facial landmarks.
-        width: Output width.
-        height: Output height.
-
-    Returns:
-        Tuple of (landmark_image, canny_edges, wireframe).
-    """
+    """Generate full conditioning signal for ControlNet."""
     from landmarkdiff.landmarks import render_landmark_image
 
     w = width or face.image_width

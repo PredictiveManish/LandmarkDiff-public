@@ -123,7 +123,7 @@ def main():
     failed = 0
 
     if args.workers <= 1:
-        # Sequential — safer with MediaPipe
+        # Sequential - safer with MediaPipe
         from landmarkdiff.synthetic.pair_generator import generate_pair, save_pair
 
         for i, (img_path, pair_idx, out, procedure, intensity, seed) in enumerate(work_items):
@@ -154,7 +154,7 @@ def main():
                       f"{rate:.1f} pairs/sec | "
                       f"ETA: {eta/60:.1f} min")
     else:
-        # Parallel — use ProcessPoolExecutor
+        # Parallel - use ProcessPoolExecutor
         with ProcessPoolExecutor(max_workers=args.workers) as executor:
             futures = {executor.submit(generate_single_pair, item): item for item in work_items}
             for future in as_completed(futures):

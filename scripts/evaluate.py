@@ -119,17 +119,7 @@ def run_evaluation(
     compute_identity: bool = False,
     ip_adapter_scale: float = 0.6,
 ) -> EvalMetrics:
-    """Run full evaluation pipeline.
-
-    Args:
-        test_dir: Directory with test pairs.
-        output_dir: Where to save results.
-        checkpoint: Path to ControlNet checkpoint (optional).
-        mode: Inference mode (tps/controlnet/controlnet_ip/img2img).
-        num_samples: Max samples (0 = all).
-        compute_fid_score: Whether to compute FID (requires generated image dir).
-        compute_identity: Whether to compute ArcFace similarity.
-        ip_adapter_scale: IP-Adapter scale for controlnet_ip mode.
+    """Run full eval pipeline on test pairs.
     """
     test_path = Path(test_dir)
     out_path = Path(output_dir)

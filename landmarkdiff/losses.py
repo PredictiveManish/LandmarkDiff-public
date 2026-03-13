@@ -1,11 +1,10 @@
-"""4-term loss function module for ControlNet fine-tuning.
+"""4-term loss for ControlNet fine-tuning.
 
-L_total = L_diffusion + w_landmark * L_landmark + w_identity * L_identity + w_perceptual * L_perceptual
+L_total = L_diff + w_lm * L_landmark + w_id * L_identity + w_perc * L_perceptual
 
-Phase A (synthetic TPS data): L_diffusion ONLY. No perceptual loss against
-rubbery TPS warps — it would penalize realism.
-
-Phase B (FEM/clinical data): All 4 terms enabled.
+Phase A (synthetic TPS data): diffusion loss only. No perceptual against
+rubbery TPS warps - it would penalize realism.
+Phase B (FEM/clinical data): all 4 terms.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ class LossWeights:
 
 
 class DiffusionLoss:
-    """Standard epsilon-prediction MSE loss (primary training signal)."""
+    """Epsilon-prediction MSE."""
 
     def __call__(
         self,
@@ -38,10 +37,9 @@ class DiffusionLoss:
 
 
 class LandmarkLoss:
-    """L2 landmark distance normalized by inter-ocular distance.
+    """L2 landmark distance, IOD-normalized, inside surgical mask only.
 
-    Computed INSIDE surgical mask only. Requires MediaPipe re-extraction
-    from generated image (done at eval, not every training step for speed).
+    Requires re-extraction from generated image (eval only, too slow per step).
     """
 
     def __call__(
@@ -68,17 +66,10 @@ class LandmarkLoss:
 
 
 class IdentityLoss:
-    """ArcFace cosine similarity loss with procedure-dependent masking.
+    """ArcFace cosine sim loss, procedure-dependent crop.
 
-    Uses InsightFace ArcFace model (buffalo_l) for 512-dim identity embeddings.
-    Falls back to pixel-level cosine similarity if InsightFace is unavailable.
-
-    - Full face for blepharoplasty
-    - Upper-face crop for rhinoplasty
-    - Disabled for orthognathic
-
-    Input images MUST be normalized to [-1, 1] and cropped to 112x112
-    before passing to ArcFace (AdaFace outputs garbage for 1024x1024).
+    buffalo_l 512-dim embeddings, falls back to pixel cosine if unavailable.
+    Disabled for orthognathic. Images MUST be [-1,1] at 112x112 for ArcFace.
     """
 
     def __init__(self, device: torch.device | None = None):
@@ -87,7 +78,7 @@ class IdentityLoss:
         self._has_arcface = None  # None = not checked yet
 
     def _ensure_loaded(self, device: torch.device) -> None:
-        """Lazy-load ArcFace model on first use."""
+        """Lazy-load ArcFace on first call."""
         if self._has_arcface is not None:
             return
         try:
@@ -104,14 +95,7 @@ class IdentityLoss:
 
     @torch.no_grad()
     def _extract_embedding(self, image_tensor: torch.Tensor) -> torch.Tensor:
-        """Extract ArcFace embedding from a batch of images.
-
-        Args:
-            image_tensor: (B, 3, 112, 112) in [-1, 1]
-
-        Returns:
-            (B, 512) identity embeddings, or (B, D) pixel-level if fallback.
-        """
+        """(B,3,112,112) in [-1,1] -> (B,512) embeddings (or pixel fallback)."""
         if self._has_arcface:
             import numpy as np
             embeddings = []
@@ -169,7 +153,7 @@ class IdentityLoss:
 
         valid_t = torch.tensor(valid, device=pred_image.device)
 
-        # L2 normalize (safe — only valid embeddings have nonzero norm)
+        # L2 normalize (safe, only valid embeddings have nonzero norm)
         pred_emb = F.normalize(pred_emb.float(), dim=1)
         target_emb = F.normalize(target_emb.float(), dim=1)
 
@@ -183,7 +167,7 @@ class IdentityLoss:
         image: torch.Tensor,
         procedure: str,
     ) -> torch.Tensor:
-        """Crop image based on procedure for identity comparison."""
+        """Procedure-specific crop for identity comparison."""
         _, _, h, w = image.shape
 
         if procedure == "rhinoplasty":
@@ -200,11 +184,7 @@ class IdentityLoss:
 
 
 class PerceptualLoss:
-    """LPIPS perceptual loss on regions OUTSIDE surgical mask only.
-
-    LPIPS expects [-1, 1] input. VAE outputs [0, 1].
-    Must apply (x * 2) - 1 before every call.
-    """
+    """LPIPS outside surgical mask only. Remember: LPIPS wants [-1,1], VAE gives [0,1]."""
 
     def __init__(self):
         self._lpips = None
@@ -247,11 +227,7 @@ class PerceptualLoss:
 
 
 class CombinedLoss:
-    """Combined 4-term loss with configurable weights.
-
-    Use phase='A' for Phase A training (diffusion only).
-    Use phase='B' for Phase B training (all terms).
-    """
+    """4-term combined loss. phase='A' = diffusion only, phase='B' = all terms."""
 
     def __init__(
         self,
