@@ -1,4 +1,4 @@
-"""Split scraped comparison images into before/after pairs for ControlNet training."""
+"""Split comparison images into before/after pairs for ControlNet training."""
 
 import argparse
 import json
@@ -93,7 +93,7 @@ def compute_displacement(
 def main():
     parser = argparse.ArgumentParser(description="Process real surgery before/after images")
     parser.add_argument("--raw_dir", type=str, default="data/real_surgery_pairs/raw",
-                        help="Directory with raw scraped images")
+                        help="Directory with raw comparison images")
     parser.add_argument("--output", type=str, default="data/real_surgery_pairs",
                         help="Output directory for processed pairs")
     parser.add_argument("--size", type=int, default=512, help="Target image size")

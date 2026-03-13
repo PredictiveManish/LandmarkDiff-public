@@ -113,7 +113,13 @@ def motion_blur(image: np.ndarray, rng: np.random.Generator) -> np.ndarray:
 
     M = cv2.getRotationMatrix2D((size / 2, size / 2), angle, 1)
     kernel = cv2.warpAffine(kernel, M, (size, size))
-    kernel = kernel / kernel.sum()
+    ksum = kernel.sum()
+    if ksum > 0:
+        kernel = kernel / ksum
+    else:
+        # rotation can zero out the kernel - fall back to identity
+        kernel = np.zeros_like(kernel)
+        kernel[size // 2, size // 2] = 1.0
 
     return cv2.filter2D(image, -1, kernel)
 

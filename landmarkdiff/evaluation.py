@@ -240,7 +240,7 @@ def compute_identity_similarity(
             name="buffalo_l",
             providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
         )
-        app.prepare(ctx_id=-1, det_size=(112, 112))
+        app.prepare(ctx_id=-1, det_size=(320, 320))
 
         pred_bgr = pred if pred.shape[2] == 3 else cv2.cvtColor(pred, cv2.COLOR_RGB2BGR)
         target_bgr = target if target.shape[2] == 3 else cv2.cvtColor(target, cv2.COLOR_RGB2BGR)

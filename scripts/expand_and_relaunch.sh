@@ -63,7 +63,7 @@ echo "Total faces in mega pool: $TOTAL"
 # Now submit the wave 2 synthetic generation jobs
 echo "=== Submitting wave 2 synthetic generation at $(date) ==="
 
-cat > /tmp/synth_wave2.sh << 'INNEREOF'
+cat > ${WORK_DIR}/synth_wave2.sh << 'INNEREOF'
 #!/bin/bash
 #SBATCH --job-name=tesla_synth2
 #SBATCH --partition=batch
@@ -96,5 +96,5 @@ python scripts/generate_synthetic_pairs.py \
 echo "Completed $PROC at $(date)"
 INNEREOF
 
-sbatch /tmp/synth_wave2.sh
+sbatch ${WORK_DIR}/synth_wave2.sh
 echo "Wave 2 submitted at $(date)"

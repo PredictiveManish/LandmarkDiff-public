@@ -211,6 +211,17 @@ class PerceptualLoss:
         # Invert mask: we want loss OUTSIDE surgical region
         outside_mask = 1 - mask
 
+        # Erode outside_mask by a few pixels to avoid artificial edge features
+        # at the mask boundary (LPIPS VGG detects the hard 0->value transition)
+        erode_kernel = 5
+        if outside_mask.shape[-1] >= erode_kernel and outside_mask.shape[-2] >= erode_kernel:
+            outside_mask = -F.max_pool2d(
+                -outside_mask,
+                kernel_size=erode_kernel,
+                stride=1,
+                padding=erode_kernel // 2,
+            )
+
         # Normalize to [-1, 1] for LPIPS FIRST, then mask
         pred_norm = pred * 2 - 1
         target_norm = target * 2 - 1
