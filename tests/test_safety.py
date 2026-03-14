@@ -227,7 +227,7 @@ class TestOODDetection:
         blue_img = np.zeros((256, 256, 3), dtype=np.uint8)
         blue_img[:, :, 0] = 200  # B channel high
         blue_img[:, :, 1] = 50
-        blue_img[:, :, 2] = 50   # R channel low
+        blue_img[:, :, 2] = 50  # R channel low
         validator._check_ood(result, blue_img)
         assert any("blue" in w.lower() for w in result.warnings)
 
