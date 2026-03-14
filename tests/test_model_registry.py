@@ -286,3 +286,195 @@ class TestSummary:
         s = registry.summary()
         assert "1000" in s
         assert "4000" in s
+
+
+# ---------------------------------------------------------------------------
+# Special directory scanning (final/best/latest)
+# ---------------------------------------------------------------------------
+
+
+class TestSpecialDirectories:
+    def test_scan_final_directory(self, tmp_path):
+        """'final' directories should be discovered."""
+        base = tmp_path / "checkpoints"
+        _create_checkpoint(base, 1000)
+        # Create a 'final' directory
+        final_dir = base / "final"
+        final_dir.mkdir(parents=True, exist_ok=True)
+        model = TinyModel()
+        torch.save(
+            {"controlnet": model.state_dict(), "global_step": 9999},
+            final_dir / "training_state.pt",
+        )
+        reg = ModelRegistry(base)
+        # Should find checkpoint-1000 + final
+        assert len(reg) == 2
+        assert any("final" in name for name in [e.name for e in reg.list_models()])
+
+    def test_scan_best_directory(self, tmp_path):
+        """'best' directories should be discovered."""
+        base = tmp_path / "checkpoints"
+        best_dir = base / "best"
+        best_dir.mkdir(parents=True, exist_ok=True)
+        model = TinyModel()
+        torch.save(
+            {"controlnet": model.state_dict()},
+            best_dir / "training_state.pt",
+        )
+        reg = ModelRegistry(base)
+        assert len(reg) == 1
+
+    def test_scan_latest_directory(self, tmp_path):
+        """'latest' directories should be discovered."""
+        base = tmp_path / "checkpoints"
+        latest_dir = base / "latest"
+        latest_dir.mkdir(parents=True, exist_ok=True)
+        (latest_dir / "controlnet_ema").mkdir()
+        (latest_dir / "controlnet_ema" / "config.json").write_text("{}")
+        reg = ModelRegistry(base)
+        assert len(reg) == 1
+
+
+# ---------------------------------------------------------------------------
+# Loading edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestLoadingEdgeCases:
+    def test_load_missing_training_state_file(self, tmp_path):
+        """Loading a checkpoint without training_state.pt should raise."""
+        base = tmp_path / "checkpoints"
+        ckpt_dir = base / "checkpoint-100"
+        ckpt_dir.mkdir(parents=True)
+        # Only create EMA dir, no training_state.pt
+        (ckpt_dir / "controlnet_ema").mkdir()
+        (ckpt_dir / "controlnet_ema" / "config.json").write_text("{}")
+
+        reg = ModelRegistry(base)
+        assert len(reg) == 1
+        with pytest.raises(FileNotFoundError):
+            reg.load("checkpoint-100")
+
+    def test_load_controlnet_missing_raises(self, tmp_path):
+        """load_controlnet should raise KeyError for unknown checkpoints."""
+        reg = ModelRegistry(tmp_path / "nonexistent")
+        with pytest.raises(KeyError):
+            reg.load_controlnet("nope")
+
+
+# ---------------------------------------------------------------------------
+# Rescan behavior
+# ---------------------------------------------------------------------------
+
+
+class TestRescan:
+    def test_rescan_clears_old_entries(self, tmp_path):
+        """Rescanning should clear previously discovered models."""
+        base = tmp_path / "checkpoints"
+        _create_checkpoint(base, 1000)
+        reg = ModelRegistry(base)
+        assert len(reg) == 1
+
+        # Remove the checkpoint and rescan
+        import shutil
+
+        shutil.rmtree(base / "checkpoint-1000")
+        count = reg.scan()
+        assert count == 0
+        assert len(reg) == 0
+
+    def test_rescan_picks_up_new_checkpoints(self, tmp_path):
+        """Rescanning should find newly added checkpoints."""
+        base = tmp_path / "checkpoints"
+        _create_checkpoint(base, 1000)
+        reg = ModelRegistry(base)
+        assert len(reg) == 1
+
+        _create_checkpoint(base, 2000, {"loss": 0.1})
+        count = reg.scan()
+        assert count == 2
+        assert reg.get("checkpoint-2000") is not None
+
+
+# ---------------------------------------------------------------------------
+# Compare edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestCompareEdgeCases:
+    def test_compare_partial_metrics(self, tmp_path):
+        """Compare checkpoints where not all have the same metrics."""
+        base = tmp_path / "checkpoints"
+        _create_checkpoint(base, 1000, {"loss": 0.5})
+        _create_checkpoint(base, 2000, {"loss": 0.3, "fid": 12.0})
+        reg = ModelRegistry(base)
+
+        result = reg.compare(["checkpoint-1000", "checkpoint-2000"])
+        assert result["count"] == 2
+        # checkpoint-1000 should have None for fid
+        row_1000 = [r for r in result["rows"] if r["name"] == "checkpoint-1000"][0]
+        assert row_1000.get("fid") is None
+
+    def test_compare_single_checkpoint(self, registry):
+        """Comparing a single checkpoint should work."""
+        result = registry.compare(["checkpoint-3000"])
+        assert result["count"] == 1
+        assert result["rows"][0]["step"] == 3000
+
+    def test_compare_mix_valid_invalid(self, registry):
+        """Invalid names in compare should be silently skipped."""
+        result = registry.compare(["checkpoint-1000", "nonexistent", "checkpoint-3000"])
+        assert result["count"] == 2
+
+
+# ---------------------------------------------------------------------------
+# ModelEntry extended
+# ---------------------------------------------------------------------------
+
+
+class TestModelEntryExtended:
+    def test_inference_path_prefers_ema(self, tmp_path):
+        """EMA should be preferred over training_state.pt."""
+        ckpt = tmp_path / "ckpt"
+        ckpt.mkdir()
+        (ckpt / "controlnet_ema").mkdir()
+        (ckpt / "training_state.pt").touch()
+        entry = ModelEntry(name="ckpt", path=ckpt, has_ema=True, has_training_state=True)
+        assert entry.inference_path == ckpt / "controlnet_ema"
+
+    def test_metrics_default_empty(self):
+        """Metrics should default to an empty dict."""
+        e1 = ModelEntry(name="a", path=Path("/tmp/a"))
+        e2 = ModelEntry(name="b", path=Path("/tmp/b"))
+        assert e1.metrics is not e2.metrics  # separate instances
+
+    def test_size_mb_field(self, registry_dir):
+        """Size should be populated from metadata."""
+        reg = ModelRegistry(registry_dir)
+        entry = reg.get("checkpoint-1000")
+        assert entry is not None
+        assert isinstance(entry.size_mb, float)
+
+
+# ---------------------------------------------------------------------------
+# Registry dunder methods
+# ---------------------------------------------------------------------------
+
+
+class TestRegistryDunders:
+    def test_len(self, registry):
+        assert len(registry) == 4
+
+    def test_contains_true(self, registry):
+        assert "checkpoint-2000" in registry
+
+    def test_contains_false(self, registry):
+        assert "checkpoint-9999" not in registry
+
+    def test_init_no_scan(self, registry_dir):
+        """scan_on_init=False should leave registry empty."""
+        reg = ModelRegistry(registry_dir, scan_on_init=False)
+        assert len(reg) == 0
+        # Manual scan should populate it
+        reg.scan()
+        assert len(reg) == 4

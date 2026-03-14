@@ -262,3 +262,139 @@ class TestFullPostprocess:
             verify_identity=False,
         )
         assert not np.array_equal(r1["image"], r2["image"])
+
+    def test_codeformer_mode_falls_back(self, face_images):
+        """CodeFormer mode should fall through to gfpgan or none."""
+        source, target, mask = face_images
+        result = full_postprocess(
+            source,
+            target,
+            mask,
+            restore_mode="codeformer",
+            use_realesrgan=False,
+            verify_identity=False,
+        )
+        assert result["image"].shape == target.shape
+        # Restore used depends on what is available in the env
+        assert result["restore_used"] in ("codeformer", "gfpgan", "none")
+
+    def test_gfpgan_mode(self, face_images):
+        """GFPGAN restore mode path."""
+        source, target, mask = face_images
+        result = full_postprocess(
+            source,
+            target,
+            mask,
+            restore_mode="gfpgan",
+            use_realesrgan=False,
+            verify_identity=False,
+        )
+        assert result["image"].shape == target.shape
+        assert result["restore_used"] in ("gfpgan", "none")
+
+
+class TestEnhanceBackgroundFallback:
+    """Test Real-ESRGAN background enhancement fallback."""
+
+    def test_returns_original_shape(self, face_images):
+        from landmarkdiff.postprocess import enhance_background_realesrgan
+
+        source, _, mask = face_images
+        result = enhance_background_realesrgan(source, mask)
+        assert result.shape == source.shape
+
+    def test_with_uint8_mask(self, face_images):
+        from landmarkdiff.postprocess import enhance_background_realesrgan
+
+        source, _, mask = face_images
+        mask_uint8 = (mask * 255).astype(np.uint8)
+        result = enhance_background_realesrgan(source, mask_uint8.astype(np.float32))
+        assert result.shape == source.shape
+
+
+class TestVerifyIdentityFallback:
+    """Test ArcFace identity verification fallback."""
+
+    def test_returns_dict(self):
+        from landmarkdiff.postprocess import verify_identity_arcface
+
+        img = np.random.randint(50, 200, (256, 256, 3), dtype=np.uint8)
+        result = verify_identity_arcface(img, img)
+        assert isinstance(result, dict)
+        assert "similarity" in result
+        assert "passed" in result
+        assert "message" in result
+
+    def test_custom_threshold(self):
+        from landmarkdiff.postprocess import verify_identity_arcface
+
+        img = np.random.randint(50, 200, (256, 256, 3), dtype=np.uint8)
+        result = verify_identity_arcface(img, img, threshold=0.9)
+        assert isinstance(result, dict)
+
+
+class TestHistogramMatchEdgeCases:
+    """Additional edge cases for histogram matching."""
+
+    def test_uint8_mask_threshold(self):
+        """Test that uint8-scale mask uses > 76 threshold."""
+        rng = np.random.default_rng(99)
+        source = rng.integers(100, 200, (64, 64, 3), dtype=np.uint8)
+        reference = rng.integers(80, 180, (64, 64, 3), dtype=np.uint8)
+        mask = np.full((64, 64), 100, dtype=np.uint8)
+        result = histogram_match_skin(source, reference, mask)
+        assert result.shape == source.shape
+
+    def test_identical_images(self):
+        """Matching identical images should change very little."""
+        img = np.random.randint(80, 200, (128, 128, 3), dtype=np.uint8)
+        mask = np.ones((128, 128), dtype=np.float32)
+        result = histogram_match_skin(img, img.copy(), mask)
+        diff = np.abs(result.astype(float) - img.astype(float)).mean()
+        assert diff < 10.0
+
+
+class TestFrequencyAwareSharpenEdgeCases:
+    """Additional edge cases for frequency-aware sharpening."""
+
+    def test_small_image(self):
+        """Test with a very small image."""
+        img = np.random.randint(50, 200, (32, 32, 3), dtype=np.uint8)
+        result = frequency_aware_sharpen(img, strength=0.3)
+        assert result.shape == img.shape
+
+    def test_non_square_image(self):
+        """Test with a non-square image."""
+        img = np.random.randint(50, 200, (256, 384, 3), dtype=np.uint8)
+        result = frequency_aware_sharpen(img, strength=0.3)
+        assert result.shape == img.shape
+
+    def test_large_radius(self):
+        """Test with a large blur radius."""
+        img = np.random.randint(50, 200, (128, 128, 3), dtype=np.uint8)
+        result = frequency_aware_sharpen(img, strength=0.3, radius=7)
+        assert result.shape == img.shape
+        assert result.dtype == np.uint8
+
+
+class TestLaplacianBlendEdgeCases:
+    """Additional edge cases for Laplacian blending."""
+
+    def test_non_square_images(self):
+        """Blending non-square images should work."""
+        rng = np.random.default_rng(42)
+        source = rng.integers(0, 255, (256, 384, 3), dtype=np.uint8)
+        target = rng.integers(0, 255, (256, 384, 3), dtype=np.uint8)
+        mask = np.zeros((256, 384), dtype=np.float32)
+        cv2.circle(mask, (192, 128), 80, 1.0, -1)
+        result = laplacian_pyramid_blend(source, target, mask, levels=3)
+        assert result.shape == target.shape
+
+    def test_single_level(self):
+        """Blending with 1 level (degenerate case)."""
+        rng = np.random.default_rng(42)
+        source = rng.integers(0, 255, (64, 64, 3), dtype=np.uint8)
+        target = rng.integers(0, 255, (64, 64, 3), dtype=np.uint8)
+        mask = np.ones((64, 64), dtype=np.float32) * 0.5
+        result = laplacian_pyramid_blend(source, target, mask, levels=1)
+        assert result.shape == target.shape
