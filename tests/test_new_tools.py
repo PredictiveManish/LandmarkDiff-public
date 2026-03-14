@@ -198,6 +198,7 @@ class TestPreflightChecker:
 
     def test_check_config_valid(self, tmp_path):
         import yaml
+
         from scripts.preflight_training import check_config
 
         config = {

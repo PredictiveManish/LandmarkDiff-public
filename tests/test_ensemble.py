@@ -141,6 +141,7 @@ class TestSplitScript:
     def test_split_dry_run(self, tmp_path):
         """Test split in dry-run mode."""
         import cv2
+
         from scripts.create_test_split import create_split
 
         # Create mock dataset

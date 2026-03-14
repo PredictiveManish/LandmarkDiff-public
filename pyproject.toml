@@ -87,7 +87,19 @@ ignore = ["N812"]
 "scripts/plot_training_curves.py" = ["E402", "E501"]
 "scripts/process_hda_database.py" = ["E402"]
 "scripts/run_evaluation.py" = ["E402"]
+"scripts/augmentation_preview.py" = ["E402"]
+"scripts/batch_inference.py" = ["E501"]
+"scripts/clinical_demo.py" = ["E402", "E501"]
+"scripts/compare_models.py" = ["E402", "E501"]
+"scripts/extract_displacements.py" = ["E402"]
+"scripts/generate_paper_tables.py" = ["E501"]
+"scripts/launch_training.py" = ["E501"]
+"scripts/post_training_pipeline.py" = ["E402", "E501"]
+"scripts/preflight_training.py" = ["E402", "E501"]
+"scripts/reconstruct_metadata.py" = ["E402", "E501"]
+"scripts/submit_job.py" = ["E402", "N802"]
 "scripts/validate_config.py" = ["E402", "SIM102"]
+"scripts/validate_paper.py" = ["E741"]
 "tests/test_exhaustive.py" = ["N806"]
 "tests/test_deep_dive.py" = ["N806", "B017"]
 "tests/test_augmentation.py" = ["N806"]
@@ -105,6 +117,7 @@ check_untyped_defs = false
 
 [[tool.mypy.overrides]]
 module = [
+    "landmarkdiff.augmentation",
     "landmarkdiff.hyperparam",
     "landmarkdiff.inference",
     "landmarkdiff.ensemble",
@@ -112,8 +125,13 @@ module = [
     "landmarkdiff.arcface_torch",
     "landmarkdiff.displacement_model",
     "landmarkdiff.checkpoint_manager",
+    "landmarkdiff.clinical",
+    "landmarkdiff.evaluation",
+    "landmarkdiff.experiment_tracker",
     "landmarkdiff.face_verifier",
+    "landmarkdiff.log",
     "landmarkdiff.metrics_viz",
+    "landmarkdiff.postprocess",
     "landmarkdiff.data",
     "landmarkdiff.synthetic.*",
 ]

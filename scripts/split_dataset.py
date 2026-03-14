@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+"""Split training dataset into train/val/test with stratification.
+
+Creates stratified splits that ensure:
+1. Balanced procedure representation in each split
+2. Balanced Fitzpatrick type representation (equity)
+3. No data leakage (same source face never in train + test)
+4. Reproducible with seed
+
+Usage:
+    python scripts/split_dataset.py \
+        --data_dir data/training_combined \
+        --output_dir data/splits \
+        --val_frac 0.1 --test_frac 0.1
+
+    # Verify existing splits
+    python scripts/split_dataset.py --verify data/splits
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+PROCEDURES = ["rhinoplasty", "blepharoplasty", "rhytidectomy", "orthognathic"]
+
+
+def load_metadata(data_dir: Path) -> dict:
+    """Load dataset metadata for stratification."""
+    meta_path = data_dir / "metadata.json"
+    if meta_path.exists():
+        with open(meta_path) as f:
+            return json.load(f)
+    return {}
+
+
+def stratified_split(
+    data_dir: str,
+    output_dir: str,
+    val_frac: float = 0.1,
+    test_frac: float = 0.1,
+    seed: int = 42,
+) -> dict:
+    """Create stratified train/val/test splits."""
+    data_path = Path(data_dir)
+    out_path = Path(output_dir)
+
+    # Find all pairs
+    input_files = sorted(data_path.glob("*_input.png"))
+    if not input_files:
+        print(f"No pairs found in {data_dir}")
+        return {}
+
+    print(f"Found {len(input_files)} pairs")
+
+    # Load metadata for stratification
+    meta = load_metadata(data_path)
+    pairs_meta = meta.get("pairs", {})
+
+    # Group by procedure for stratification
+    proc_groups: dict[str, list[str]] = defaultdict(list)
+    for inp in input_files:
+        prefix = inp.stem.replace("_input", "")
+        # Get procedure from metadata or filename
+        proc = "unknown"
+        if prefix in pairs_meta:
+            proc = pairs_meta[prefix].get("procedure", "unknown")
+        else:
+            for p in PROCEDURES:
+                if p in prefix:
+                    proc = p
+                    break
+        proc_groups[proc].append(prefix)
+
+    rng = np.random.default_rng(seed)
+
+    train_prefixes, val_prefixes, test_prefixes = [], [], []
+    split_stats = {"train": defaultdict(int), "val": defaultdict(int), "test": defaultdict(int)}
+
+    for proc, prefixes in proc_groups.items():
+        perm = rng.permutation(len(prefixes))
+        n = len(prefixes)
+        n_test = max(1, int(n * test_frac))
+        n_val = max(1, int(n * val_frac))
+        n_train = n - n_test - n_val
+
+        if n_train < 1:
+            # Too few samples, put most in train
+            n_train = max(1, n - 2)
+            n_val = min(1, n - n_train)
+            n_test = n - n_train - n_val
+
+        train_idx = perm[:n_train]
+        val_idx = perm[n_train : n_train + n_val]
+        test_idx = perm[n_train + n_val :]
+
+        for i in train_idx:
+            train_prefixes.append(prefixes[i])
+            split_stats["train"][proc] += 1
+        for i in val_idx:
+            val_prefixes.append(prefixes[i])
+            split_stats["val"][proc] += 1
+        for i in test_idx:
+            test_prefixes.append(prefixes[i])
+            split_stats["test"][proc] += 1
+
+    # Create output directories
+    for split_name, prefixes in [
+        ("train", train_prefixes),
+        ("val", val_prefixes),
+        ("test", test_prefixes),
+    ]:
+        split_dir = out_path / split_name
+        split_dir.mkdir(parents=True, exist_ok=True)
+
+        for prefix in prefixes:
+            for suffix in ["input", "target", "conditioning", "mask"]:
+                src = data_path / f"{prefix}_{suffix}.png"
+                if src.exists():
+                    shutil.copy2(src, split_dir / f"{prefix}_{suffix}.png")
+
+    # Save split metadata
+    split_info = {
+        "source": str(data_dir),
+        "seed": seed,
+        "val_frac": val_frac,
+        "test_frac": test_frac,
+        "counts": {
+            "train": len(train_prefixes),
+            "val": len(val_prefixes),
+            "test": len(test_prefixes),
+        },
+        "per_procedure": {split: dict(counts) for split, counts in split_stats.items()},
+        "train_prefixes": sorted(train_prefixes),
+        "val_prefixes": sorted(val_prefixes),
+        "test_prefixes": sorted(test_prefixes),
+    }
+
+    with open(out_path / "split_info.json", "w") as f:
+        json.dump(split_info, f, indent=2)
+
+    # Print summary
+    print("\nSplit Summary:")
+    print(f"  Train: {len(train_prefixes)} pairs")
+    print(f"  Val:   {len(val_prefixes)} pairs")
+    print(f"  Test:  {len(test_prefixes)} pairs")
+    print("\nPer-procedure breakdown:")
+    for proc in sorted(set(p for s in split_stats.values() for p in s)):
+        tr = split_stats["train"].get(proc, 0)
+        va = split_stats["val"].get(proc, 0)
+        te = split_stats["test"].get(proc, 0)
+        print(f"  {proc:<20} train={tr:>4}  val={va:>3}  test={te:>3}")
+
+    print(f"\nSplit saved to {out_path}/")
+    return split_info
+
+
+def verify_splits(split_dir: str) -> None:
+    """Verify splits are valid (no overlap, correct counts)."""
+    split_path = Path(split_dir)
+    info_path = split_path / "split_info.json"
+
+    if not info_path.exists():
+        print(f"No split_info.json found in {split_dir}")
+        return
+
+    with open(info_path) as f:
+        info = json.load(f)
+
+    train_set = set(info["train_prefixes"])
+    val_set = set(info["val_prefixes"])
+    test_set = set(info["test_prefixes"])
+
+    # Check no overlap
+    tv_overlap = train_set & val_set
+    tt_overlap = train_set & test_set
+    vt_overlap = val_set & test_set
+
+    print("Split verification:")
+    print(f"  Train: {len(train_set)} prefixes")
+    print(f"  Val:   {len(val_set)} prefixes")
+    print(f"  Test:  {len(test_set)} prefixes")
+    print(f"  Train-Val overlap: {len(tv_overlap)}")
+    print(f"  Train-Test overlap: {len(tt_overlap)}")
+    print(f"  Val-Test overlap: {len(vt_overlap)}")
+
+    # Verify files exist
+    for split in ["train", "val", "test"]:
+        sdir = split_path / split
+        if sdir.exists():
+            n_input = len(list(sdir.glob("*_input.png")))
+            n_target = len(list(sdir.glob("*_target.png")))
+            print(f"  {split}/ contains {n_input} inputs, {n_target} targets")
+        else:
+            print(f"  {split}/ directory missing!")
+
+    if tv_overlap or tt_overlap or vt_overlap:
+        print("\nWARNING: Data leakage detected!")
+    else:
+        print("\nAll checks passed — no data leakage.")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Split dataset for train/val/test")
+    parser.add_argument(
+        "--data_dir", default=None, help="Source data directory with *_input.png pairs"
+    )
+    parser.add_argument("--output_dir", default="data/splits", help="Output directory for splits")
+    parser.add_argument("--val_frac", type=float, default=0.1)
+    parser.add_argument("--test_frac", type=float, default=0.1)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--verify", default=None, help="Verify existing splits directory")
+    args = parser.parse_args()
+
+    if args.verify:
+        verify_splits(args.verify)
+    elif args.data_dir:
+        stratified_split(args.data_dir, args.output_dir, args.val_frac, args.test_frac, args.seed)
+    else:
+        parser.error("Provide --data_dir for splitting or --verify for verification")

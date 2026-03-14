@@ -843,6 +843,7 @@ class TestTrainingResilience:
     def test_validate_checkpoint_good(self, tmp_path):
         """Validate a valid checkpoint."""
         import torch
+
         from scripts.training_resilience import validate_checkpoint
 
         # Create a fake checkpoint
@@ -866,6 +867,7 @@ class TestTrainingResilience:
     def test_validate_checkpoint_nan(self, tmp_path):
         """Detect NaN in checkpoint weights."""
         import torch
+
         from scripts.training_resilience import validate_checkpoint
 
         ckpt_dir = tmp_path / "checkpoint-bad"
@@ -889,6 +891,7 @@ class TestTrainingResilience:
     def test_validate_checkpoint_shape_mismatch(self, tmp_path):
         """Detect shape mismatch between ControlNet and EMA."""
         import torch
+
         from scripts.training_resilience import validate_checkpoint
 
         ckpt_dir = tmp_path / "checkpoint-mismatch"
@@ -909,6 +912,7 @@ class TestTrainingResilience:
     def test_gradient_watchdog_ok(self):
         """Gradient watchdog passes on healthy gradients."""
         import torch
+
         from scripts.training_resilience import GradientWatchdog
 
         watchdog = GradientWatchdog()
@@ -924,6 +928,7 @@ class TestTrainingResilience:
     def test_gradient_watchdog_nan_loss(self):
         """Gradient watchdog catches NaN loss."""
         import torch
+
         from scripts.training_resilience import GradientWatchdog
 
         watchdog = GradientWatchdog()
@@ -945,6 +950,7 @@ class TestTrainingResilience:
         from unittest.mock import MagicMock
 
         import torch
+
         from scripts.training_resilience import create_emergency_save_fn
 
         # Create minimal model state dicts
@@ -1638,12 +1644,11 @@ class TestDisplacementAnalysis:
 
     def test_ablation_table2_compatibility(self, tmp_path):
         """Ablation template works with generate_paper_tables Table 2."""
-        from scripts.generate_paper_tables import generate_table2_ablation
-
         from scripts.displacement_analysis import (
             generate_ablation_template,
             update_ablation_results,
         )
+        from scripts.generate_paper_tables import generate_table2_ablation
 
         ablation_path = tmp_path / "ablation.json"
         generate_ablation_template(ablation_path)
