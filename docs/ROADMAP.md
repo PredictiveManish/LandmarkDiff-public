@@ -60,31 +60,58 @@ The focus of this release is moving from hand-tuned displacement vectors to disp
 
 ---
 
-## v0.4.0 -- Multi-View and Video
+## v0.4.0 -- 3D Face Reconstruction
 
 **Target:** Q4 2026
 
-Extend predictions beyond single frontal photos to multiple viewpoints and temporal sequences.
+Move from single 2D images to full 3D face reconstruction from phone video. The user rotates their head while the phone captures from all angles (similar to Apple spatial audio or Face ID enrollment), and we reconstruct a textured 3D model for surgical deformation.
 
-### Multi-view support
-- [ ] Consistent predictions across frontal, three-quarter, and profile views
-- [ ] Multi-view consistency loss (landmark reprojection across views)
-- [ ] FLAME 3D morphable model integration for depth-aware deformation
+### Phone video capture pipeline
+- [ ] Guided head-rotation capture flow (front-facing camera, ~15 second scan)
+- [ ] Frame selection and quality filtering (blur, occlusion, lighting)
+- [ ] Camera pose estimation from the video sequence
 
-### Video prediction
-- [ ] Temporal coherence for video input (face tracking + per-frame prediction)
-- [ ] Smooth interpolation between intensity levels for animated previews
-- [ ] GIF/MP4 export from the Gradio demo
+### 3D face reconstruction
+- [ ] 3D face reconstruction from monocular video using FLAME 3D morphable model fitting
+- [ ] Explore neural reconstruction approaches (NeRF, 3D Gaussian Splatting) for higher fidelity
+- [ ] Textured mesh export (OBJ/glTF) with per-vertex color
+
+### 3D surgical deformation
+- [ ] 3D landmark extraction on the reconstructed mesh
+- [ ] Surgical deformation applied directly in 3D space (vertex-level displacement)
+- [ ] Multi-angle rendering of the predicted 3D result
+
+### Interactive viewer
+- [ ] WebGL/three.js 3D viewer in the Gradio demo
+- [ ] Orbit controls for free-angle inspection of pre/post predictions
 
 ### Backbone upgrade
 - [ ] FLUX.1-dev or SDXL backbone for higher quality generation at 1024x1024
 - [ ] IP-Adapter FaceID v2 for stronger identity preservation
 - [ ] LoRA fine-tuning support for domain-specific adaptation
 
-### Clinical tools
-- [ ] Measurement overlay: display predicted changes in millimeters
-- [ ] Before/after report generation (PDF export for patient consultations)
-- [ ] Batch processing API for clinical workflow integration
+---
+
+## v0.5.0 -- Interactive 3D Surgical Preview
+
+**Target:** Q1/Q2 2027
+
+End-to-end mobile workflow: the patient captures a video scan on their phone and gets an interactive 3D preview they can rotate and inspect before committing to surgery.
+
+### Physically-based 3D deformation
+- [ ] Per-procedure surgical parameters controlling 3D mesh deformation
+- [ ] Tissue property estimation from the reconstructed mesh (skin thickness, elasticity)
+- [ ] Anatomically constrained deformation that respects bone structure and soft tissue mechanics
+
+### Real-time interactive preview
+- [ ] Patient rotates and inspects the 3D prediction on their phone in real time
+- [ ] Before/after 3D comparison with measurement overlays (mm-scale changes)
+- [ ] Video export: animated 360-degree rotation of the predicted result
+
+### Mobile-optimized workflow
+- [ ] Capture video -> reconstruct 3D -> apply deformation -> view prediction, all on phone
+- [ ] Mesh compression and LOD for smooth rendering on mobile GPUs
+- [ ] Offline-capable inference for clinic environments with limited connectivity
 
 ---
 
@@ -92,16 +119,23 @@ Extend predictions beyond single frontal photos to multiple viewpoints and tempo
 
 **Target:** 2027
 
-Production-ready release with clinical validation data and regulatory groundwork.
+Production-ready release with clinical validation data, 3D accuracy benchmarks, and regulatory groundwork.
 
 ### Clinical validation
 - [ ] IRB-approved prospective study: compare predictions to actual surgical outcomes
 - [ ] Inter-rater agreement study with board-certified plastic surgeons
 - [ ] Statistical validation across Fitzpatrick types I-VI (equity audit)
 - [ ] Calibration analysis: does predicted intensity correlate with actual surgical magnitude?
+- [ ] Patient satisfaction studies: 3D preview vs actual surgical outcome
+
+### 3D accuracy metrics
+- [ ] Surface distance (Hausdorff, mean symmetric) between predicted and actual post-op scans
+- [ ] Landmark reprojection error measured across multiple views
+- [ ] Per-procedure accuracy breakdown with confidence intervals
 
 ### Regulatory pathway
 - [ ] FDA 510(k) pathway exploration for clinical decision support classification
+- [ ] FDA/regulatory considerations specific to 3D surgical visualization tools
 - [ ] HIPAA-compliant deployment architecture (on-premise, no patient data leaves the facility)
 - [ ] Documentation for SaMD (Software as a Medical Device) qualification
 
