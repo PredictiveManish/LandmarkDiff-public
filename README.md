@@ -6,7 +6,6 @@
 [![PyTorch 2.1+](https://img.shields.io/badge/pytorch-2.1+-ee4c2c.svg)](https://pytorch.org/)
 [![codecov](https://codecov.io/gh/dreamlessx/LandmarkDiff-public/branch/main/graph/badge.svg)](https://codecov.io/gh/dreamlessx/LandmarkDiff-public)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/dreamlessx/LandmarkDiff-public/blob/main/notebooks/quickstart.ipynb)
 
 Photorealistic facial surgery outcome prediction from standard clinical photography, powered by anatomically-conditioned latent diffusion.
 
@@ -184,7 +183,11 @@ Six-step refinement:
 
 Sample outputs are in the [demos/](demos/) directory.
 
-**Pipeline visualizations** (`demo_pipeline_0.png`, `demo_pipeline_1.png`):
+**Pipeline visualizations:**
+
+![Pipeline visualization](demos/demo_pipeline_0.png)
+
+![Pipeline visualization](demos/demo_pipeline_1.png)
 
 Step-by-step view of the full pipeline: Input -> Original Mesh -> Manipulated Mesh -> Surgical Mask -> Result.
 
@@ -195,6 +198,8 @@ ControlNet-generated photorealistic samples will be added after model training c
 ## Quick Start
 
 ### Installation
+
+**Prerequisites:** Python 3.10+ and PyTorch 2.1+ ([install guide](https://pytorch.org)). GPU with 6GB+ VRAM recommended for neural modes; CPU works for TPS mode.
 
 ```bash
 git clone https://github.com/dreamlessx/LandmarkDiff-public.git

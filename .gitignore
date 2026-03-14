@@ -56,6 +56,16 @@ scripts/demo_output/
 scripts/final_output/
 scripts/inference_output/
 
+# Project management
+PROJECT.md
+ROADMAP.md
+STATE.md
+REQUIREMENTS.md
+.planning/
+.claude-flow/
+.swarm/
+.claude/
+
 # Generated data (too large for git)
 data/ffhq_samples/
 data/synthetic_pairs/

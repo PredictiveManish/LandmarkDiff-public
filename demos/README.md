@@ -19,8 +19,8 @@ To generate your own demos:
 
 ```bash
 # TPS mode (CPU, geometric only)
-python examples/tps_only.py /path/to/face.jpg --procedure rhinoplasty --intensity 0.6
+python examples/tps_only.py /path/to/face.jpg --procedure rhinoplasty --intensity 60
 
 # ControlNet mode (GPU, photorealistic)
-python scripts/run_inference.py /path/to/face.jpg --procedure rhinoplasty --intensity 0.6 --mode controlnet
+python scripts/run_inference.py /path/to/face.jpg --procedure rhinoplasty --intensity 60 --mode controlnet
 ```
