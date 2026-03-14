@@ -12,7 +12,7 @@ Reports include:
 Usage:
     from landmarkdiff.audit import AuditReporter, AuditCase
 
-    reporter = AuditReporter(model_version="0.3.0")
+    reporter = AuditReporter(model_version="0.3.2")
     reporter.add_case(AuditCase(
         case_id="P001",
         procedure="rhinoplasty",
@@ -72,7 +72,7 @@ class AuditReporter:
 
     def __init__(
         self,
-        model_version: str = "0.3.0",
+        model_version: str = "0.3.2",
         report_title: str = "LandmarkDiff Clinical Audit Report",
     ) -> None:
         self.model_version = model_version
