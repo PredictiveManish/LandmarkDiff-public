@@ -43,10 +43,17 @@ def mock_face():
 class TestMaskConfig:
     """Tests for mask configuration."""
 
-    def test_all_procedures_defined(self):
-        expected = ["rhinoplasty", "blepharoplasty", "rhytidectomy", "orthognathic"]
+    def test_all_six_procedures_defined(self):
+        expected = [
+            "rhinoplasty",
+            "blepharoplasty",
+            "rhytidectomy",
+            "orthognathic",
+            "brow_lift",
+            "mentoplasty",
+        ]
+        assert set(expected) == set(MASK_CONFIG.keys())
         for proc in expected:
-            assert proc in MASK_CONFIG
             assert "landmark_indices" in MASK_CONFIG[proc]
             assert "dilation_px" in MASK_CONFIG[proc]
             assert "feather_sigma" in MASK_CONFIG[proc]
@@ -54,7 +61,16 @@ class TestMaskConfig:
     def test_indices_in_range(self):
         for proc, cfg in MASK_CONFIG.items():
             for idx in cfg["landmark_indices"]:
-                assert 0 <= idx < 478, f"{proc}: index {idx} out of range"
+                assert 0 <= idx <= 477, f"{proc}: index {idx} out of 0-477 range"
+
+    def test_each_procedure_has_nonempty_indices(self):
+        for proc, cfg in MASK_CONFIG.items():
+            assert len(cfg["landmark_indices"]) > 0, f"{proc}: empty landmark_indices"
+
+    def test_dilation_and_sigma_positive(self):
+        for proc, cfg in MASK_CONFIG.items():
+            assert cfg["dilation_px"] > 0, f"{proc}: dilation_px must be positive"
+            assert cfg["feather_sigma"] > 0, f"{proc}: feather_sigma must be positive"
 
 
 class TestGenerateSurgicalMask:
@@ -79,6 +95,31 @@ class TestGenerateSurgicalMask:
     def test_orthognathic_mask(self, mock_face):
         mask = generate_surgical_mask(mock_face, "orthognathic")
         assert mask.shape == (512, 512)
+
+    def test_brow_lift_mask(self, mock_face):
+        mask = generate_surgical_mask(mock_face, "brow_lift")
+        assert mask.shape == (512, 512)
+        assert mask.dtype == np.float32
+        assert mask.min() >= 0.0
+        assert mask.max() <= 1.0
+        assert mask.max() > 0  # non-empty mask
+
+    def test_mentoplasty_mask(self, mock_face):
+        mask = generate_surgical_mask(mock_face, "mentoplasty")
+        assert mask.shape == (512, 512)
+        assert mask.dtype == np.float32
+        assert mask.min() >= 0.0
+        assert mask.max() <= 1.0
+        assert mask.max() > 0  # non-empty mask
+
+    @pytest.mark.parametrize("procedure", list(MASK_CONFIG.keys()))
+    def test_all_procedures_generate_valid_mask(self, mock_face, procedure):
+        mask = generate_surgical_mask(mock_face, procedure)
+        assert mask.shape == (512, 512)
+        assert mask.dtype == np.float32
+        assert 0.0 <= mask.min()
+        assert mask.max() <= 1.0
+        assert mask.max() > 0
 
     def test_custom_dimensions(self, mock_face):
         mask = generate_surgical_mask(mock_face, "rhinoplasty", width=256, height=256)

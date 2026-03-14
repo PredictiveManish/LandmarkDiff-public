@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=69.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -14,12 +14,14 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Image Processing",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 
 dependencies = [
@@ -32,6 +34,7 @@ dependencies = [
     "opencv-python>=4.9.0",
     "numpy>=1.26.0",
     "Pillow>=10.0.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -47,6 +50,7 @@ eval = [
     "torch-fidelity>=0.3.0",
     "lpips>=0.1.4",
     "scikit-image>=0.22.0",
+    "scipy>=1.10.0",
 ]
 app = [
     "gradio>=4.15.0",
@@ -71,8 +75,9 @@ gpu = [
 [project.urls]
 Homepage = "https://github.com/dreamlessx/LandmarkDiff-public"
 Repository = "https://github.com/dreamlessx/LandmarkDiff-public"
-Documentation = "https://github.com/dreamlessx/LandmarkDiff-public/wiki"
+Documentation = "https://landmarkdiff.readthedocs.io"
 Issues = "https://github.com/dreamlessx/LandmarkDiff-public/issues"
+Changelog = "https://github.com/dreamlessx/LandmarkDiff-public/blob/main/CHANGELOG.md"
 
 [project.scripts]
 landmarkdiff = "landmarkdiff.__main__:main"
@@ -91,8 +96,16 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "B", "SIM"]
-ignore = ["N812"]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF", "PIE", "W"]
+ignore = [
+    "N812",    # lowercase-imported-as-non-lowercase (common with torch.nn.functional as F)
+    "SIM300",  # yoda-conditions (valid in range-check assertions)
+    "RUF001",  # ambiguous-unicode-character-string (false positives in docstrings)
+    "RUF003",  # ambiguous-unicode-character-comment (false positives in comments)
+    "RUF005",  # collection-literal-concatenation (["a"] + list is readable enough)
+    "RUF012",  # mutable-class-default (conflicts with dataclass patterns)
+    "RUF059",  # unused-unpacked-variable (very noisy in numeric/test code)
+]
 
 [tool.ruff.lint.per-file-ignores]
 "landmarkdiff/arcface_torch.py" = ["N806", "N802", "E741"]
@@ -171,23 +184,39 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [
-    "landmarkdiff.augmentation",
-    "landmarkdiff.hyperparam",
-    "landmarkdiff.inference",
-    "landmarkdiff.ensemble",
-    "landmarkdiff.losses",
+    "landmarkdiff.api_client",
     "landmarkdiff.arcface_torch",
-    "landmarkdiff.displacement_model",
+    "landmarkdiff.audit",
+    "landmarkdiff.augmentation",
+    "landmarkdiff.benchmark",
     "landmarkdiff.checkpoint_manager",
+    "landmarkdiff.cli",
     "landmarkdiff.clinical",
+    "landmarkdiff.conditioning",
+    "landmarkdiff.config",
+    "landmarkdiff.curriculum",
+    "landmarkdiff.data",
+    "landmarkdiff.data_version",
+    "landmarkdiff.displacement_model",
+    "landmarkdiff.ensemble",
     "landmarkdiff.evaluation",
     "landmarkdiff.experiment_tracker",
     "landmarkdiff.face_verifier",
+    "landmarkdiff.fid",
+    "landmarkdiff.hyperparam",
+    "landmarkdiff.inference",
+    "landmarkdiff.landmarks",
     "landmarkdiff.log",
+    "landmarkdiff.losses",
+    "landmarkdiff.manipulation",
+    "landmarkdiff.masking",
+    "landmarkdiff.metrics_agg",
     "landmarkdiff.metrics_viz",
+    "landmarkdiff.model_registry",
     "landmarkdiff.postprocess",
-    "landmarkdiff.data",
+    "landmarkdiff.safety",
     "landmarkdiff.synthetic.*",
+    "landmarkdiff.validation",
 ]
 ignore_errors = true
 

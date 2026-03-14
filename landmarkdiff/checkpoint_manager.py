@@ -245,10 +245,8 @@ class CheckpointManager:
                 continue
             if (
                 best_val is None
-                or self.lower_is_better
-                and val < best_val
-                or not self.lower_is_better
-                and val > best_val
+                or (self.lower_is_better and val < best_val)
+                or (not self.lower_is_better and val > best_val)
             ):
                 best, best_val = name, val
         return best

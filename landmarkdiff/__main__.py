@@ -112,7 +112,7 @@ def main() -> None:
             _run_demo()
     except KeyboardInterrupt:
         sys.exit(130)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _error(str(exc))
 
 
@@ -153,9 +153,11 @@ def _run_inference(args: argparse.Namespace) -> None:
         Image.fromarray(warped).save(str(output_dir / "prediction.png"))
         print(f"saved tps result to {output_dir / 'prediction.png'}")
     else:
+        import torch
+
         from landmarkdiff.inference import LandmarkDiffPipeline
 
-        pipeline = LandmarkDiffPipeline(mode=args.mode, device="cuda")
+        pipeline = LandmarkDiffPipeline(mode=args.mode, device=torch.device("cuda"))
         pipeline.load()
         result = pipeline.generate(
             img_array,

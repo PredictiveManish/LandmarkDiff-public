@@ -412,7 +412,7 @@ class TestCompareEdgeCases:
         result = reg.compare(["checkpoint-1000", "checkpoint-2000"])
         assert result["count"] == 2
         # checkpoint-1000 should have None for fid
-        row_1000 = [r for r in result["rows"] if r["name"] == "checkpoint-1000"][0]
+        row_1000 = next(r for r in result["rows"] if r["name"] == "checkpoint-1000")
         assert row_1000.get("fid") is None
 
     def test_compare_single_checkpoint(self, registry):

@@ -338,7 +338,7 @@ class HyperparamSearch:
                 if isinstance(val, float):
                     parts.append(f"{val:>12.6f}")
                 else:
-                    parts.append(f"{str(val):>12s}")
+                    parts.append(f"{val!s:>12s}")
             for m in metric_names:
                 val = trial.result.get(m, float("nan"))
                 parts.append(f"{val:>12.4f}")

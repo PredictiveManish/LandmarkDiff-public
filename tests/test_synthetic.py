@@ -11,6 +11,48 @@ from landmarkdiff.synthetic.augmentation import (
 from landmarkdiff.synthetic.tps_warp import generate_random_warp
 
 
+class TestSyntheticPackageExports:
+    """Verify that landmarkdiff.synthetic __init__.py exports are importable."""
+
+    def test_generate_pair_importable(self):
+        from landmarkdiff.synthetic import generate_pair
+
+        assert callable(generate_pair)
+
+    def test_generate_pairs_from_directory_importable(self):
+        from landmarkdiff.synthetic import generate_pairs_from_directory
+
+        assert callable(generate_pairs_from_directory)
+
+    def test_training_pair_importable(self):
+        from landmarkdiff.synthetic import TrainingPair
+
+        assert TrainingPair is not None
+
+    def test_apply_clinical_augmentation_importable(self):
+        from landmarkdiff.synthetic import apply_clinical_augmentation as aug
+
+        assert callable(aug)
+
+    def test_warp_image_tps_importable(self):
+        from landmarkdiff.synthetic import warp_image_tps
+
+        assert callable(warp_image_tps)
+
+    def test_all_exports_match(self):
+        import landmarkdiff.synthetic as syn
+
+        expected = [
+            "generate_pair",
+            "generate_pairs_from_directory",
+            "TrainingPair",
+            "apply_clinical_augmentation",
+            "warp_image_tps",
+        ]
+        for name in expected:
+            assert hasattr(syn, name), f"Missing export: {name}"
+
+
 class TestAugmentation:
     def _make_image(self) -> np.ndarray:
         return np.random.default_rng(0).integers(50, 200, (512, 512, 3), dtype=np.uint8)

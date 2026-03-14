@@ -219,7 +219,7 @@ class MetricsAggregator:
             val = self.mean(exp, metric, procedure)
             if math.isnan(val):
                 continue
-            if higher_better and val > best_val or not higher_better and val < best_val:
+            if (higher_better and val > best_val) or (not higher_better and val < best_val):
                 best_val = val
                 best_exp = exp
 

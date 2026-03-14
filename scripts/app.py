@@ -578,16 +578,11 @@ def build_app():
                 # Check if the angle is close to what we expect
                 angle_ok = False
                 if (
-                    expected_view == "frontal"
-                    and abs(yaw) < 20
-                    or expected_view == "left_three_quarter"
-                    and -60 < yaw < -15
-                    or expected_view == "right_three_quarter"
-                    and 15 < yaw < 60
-                    or expected_view == "left_profile"
-                    and yaw < -35
-                    or expected_view == "right_profile"
-                    and yaw > 35
+                    (expected_view == "frontal" and abs(yaw) < 20)
+                    or (expected_view == "left_three_quarter" and -60 < yaw < -15)
+                    or (expected_view == "right_three_quarter" and 15 < yaw < 60)
+                    or (expected_view == "left_profile" and yaw < -35)
+                    or (expected_view == "right_profile" and yaw > 35)
                 ):
                     angle_ok = True
 
