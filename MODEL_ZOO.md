@@ -56,3 +56,30 @@ python scripts/train_controlnet.py --data_dir data/synthetic_pairs/ --output_dir
 | Training Phase A (10K steps) | 24 GB | 40 GB (A100) | ~1 hour |
 | Training Phase A (50K steps) | 40 GB | 80 GB (A100) | ~6 hours |
 | Training Phase B | 40 GB | 80 GB (A100) | ~30 hours |
+
+## Planned Models
+
+The following models are on the roadmap as LandmarkDiff moves toward a 3D-native pipeline (phone video scan to interactive 3D surgical preview). None of these are available yet -- this section previews what is coming.
+
+| Model | Approach | Purpose | Status |
+|-------|----------|---------|--------|
+| 3D Face Reconstruction | FLAME-based fitting or neural implicit (NeRF/3DGS) | Reconstruct a textured 3D face mesh from a short phone video scan | Research |
+| 3D Deformation Model | Mesh-space surgical simulation | Apply procedure-specific displacements directly on 3D mesh vertices instead of 2D pixel warps | Research |
+| Multi-View Consistency | View-conditioned diffusion or 3DGS rendering | Ensure deformed face renders consistently across arbitrary viewpoints | Research |
+| Mobile-Optimized Inference | Distilled/quantized pipeline | Run landmark detection, reconstruction, and preview on-device with acceptable latency | Planned |
+
+### 3D face reconstruction model
+
+Replaces the current single-image 2D pipeline entry point. Given 10-30 frames from a phone video scan (patient rotating their head), reconstructs a FLAME mesh with per-vertex texture. Candidate approaches include DECA-style regression, optimization-based FLAME fitting from MediaPipe landmarks, and feed-forward 3DGS methods.
+
+### 3D deformation model
+
+Operates on the reconstructed mesh rather than on 2D pixel coordinates. Existing procedure presets (rhinoplasty, blepharoplasty, etc.) would be re-expressed as 3D vertex displacement fields, enabling anatomically grounded deformations that look correct from any viewing angle.
+
+### Multi-view consistency model
+
+Ensures that the deformed 3D representation renders without view-dependent artifacts. This may be handled implicitly by the 3D representation (mesh or 3DGS) or may require an additional consistency loss during training.
+
+### Mobile-optimized inference model
+
+A distilled or quantized version of the pipeline targeting on-device inference. The goal is real-time landmark tracking and capture guidance, with reconstruction offloaded to a server or run locally on modern phones.
