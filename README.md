@@ -8,14 +8,14 @@
 [![Hugging Face Space](https://img.shields.io/badge/%F0%9F%A4%97-Live%20Demo-yellow)](https://huggingface.co/spaces/dreamlessx/LandmarkDiff)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-Photorealistic facial surgery outcome prediction -- from a single 2D photo today, to full 3D reconstruction from a phone video scan tomorrow. Powered by anatomically-conditioned latent diffusion.
+Photorealistic facial surgery outcome prediction from a single photo, powered by anatomically-conditioned latent diffusion.
 
 <table>
 <tr>
 <td width="50%">
 
-**Input:** Single 2D photo today -- phone video scan for 3D coming next
-**Output:** Photorealistic post-op prediction (2D now, interactive 3D on the roadmap)
+**Input:** Single 2D photo -- any clinical photo or phone selfie
+**Output:** Photorealistic post-op prediction
 **Just a phone** -- no depth sensors, no clinical equipment
 
 </td>
@@ -31,11 +31,7 @@ Photorealistic facial surgery outcome prediction -- from a single 2D photo today
 
 ### Where We're Headed
 
-The current 2D pipeline is the foundation. The end goal is something closer to this: you hold up your phone, slowly rotate your head (like Apple's personalized spatial audio scan), and we reconstruct a full 3D model of your face from that video alone. Surgical deformations then happen in 3D space -- anatomically grounded, not pixel-level warping -- and you get an interactive model you can rotate to see the predicted result from any angle.
-
-No depth sensors, no clinical scanning rigs, no special hardware. Just a phone camera, a short video, and a 3D reconstruction backbone (think FLAME morphable model fitting or 3DGS-style approaches). The patient sees exactly what they're signing up for, from every viewing angle, before committing to surgery.
-
-We're building toward this in stages. The 2D single-photo pipeline ships now and works well. 3D reconstruction and volumetric deformation are next.
+The 2D pipeline ships now and works well. The end goal is full 3D: you hold up your phone, slowly rotate your head, and we reconstruct a 3D face model from that video alone. Surgical deformations then happen in 3D space -- anatomically grounded, not pixel-level warping -- and you get an interactive model you can rotate to see the predicted result from any angle. No depth sensors, no clinical scanning rigs. Just a phone camera and a short video. See the [Roadmap](#roadmap) for details on each step.
 
 LandmarkDiff extracts MediaPipe's 478-point face mesh from the input photo, applies procedure-specific Gaussian RBF deformations calibrated from anthropometric surgical data, renders the deformed mesh as a tessellation wireframe, and feeds that wireframe into a ControlNet-conditioned Stable Diffusion 1.5 backbone to synthesize the predicted face. The output is composited back onto the original image using Laplacian pyramid blending with feathered surgical masks, then refined through neural face restoration and identity verification.
 
@@ -57,7 +53,6 @@ python scripts/run_inference.py photo.jpg --procedure rhinoplasty --intensity 60
 
 ## Table of Contents
 
-- [Where We're Headed](#where-were-headed)
 - [Features](#features)
 - [Why LandmarkDiff](#why-landmarkdiff)
 - [Supported Procedures](#supported-procedures)
@@ -957,7 +952,7 @@ make clean           # remove build artifacts
 ### Future (v1.0)
 - [ ] Phone video capture -- rotate head, reconstruct full 3D face from frames
 - [ ] FLAME 3D morphable model fitting from monocular video
-- [ ] 3D surgical deformation -- procedure-specific warps in volumetric space
+- [ ] 3D surgical deformation -- procedure-specific warps in 3D space
 - [ ] Interactive 3D preview -- rotate the predicted result from any angle
 - [ ] Multi-view consistency loss across frontal/profile predictions
 - [ ] Physics-informed tissue simulation (FEM for soft tissue response)
