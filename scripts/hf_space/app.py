@@ -235,9 +235,10 @@ with gr.Blocks(
             )
 
         outputs = [out_wireframe, out_mask, out_result, out_original, info_box]
-        run_btn.click(fn=process_image, inputs=[input_image, procedure, intensity], outputs=outputs)
-        for trigger in [input_image, procedure, intensity]:
-            trigger.change(fn=process_image, inputs=[input_image, procedure, intensity], outputs=outputs)
+        _inputs = [input_image, procedure, intensity]
+        run_btn.click(fn=process_image, inputs=_inputs, outputs=outputs)
+        for trigger in _inputs:
+            trigger.change(fn=process_image, inputs=_inputs, outputs=outputs)
 
     # -- Tab 2: Compare Procedures --
     with gr.Tab("Compare All"):
@@ -286,7 +287,11 @@ with gr.Blocks(
                 inputs=[sweep_image], label="Examples",
             )
 
-        sweep_btn.click(fn=intensity_sweep, inputs=[sweep_image, sweep_proc], outputs=[sweep_gallery])
+        sweep_btn.click(
+            fn=intensity_sweep,
+            inputs=[sweep_image, sweep_proc],
+            outputs=[sweep_gallery],
+        )
 
     gr.Markdown(
         f"<div style='text-align:center;color:#999;font-size:0.8em;padding:8px'>"
