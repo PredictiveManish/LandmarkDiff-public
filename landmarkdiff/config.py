@@ -18,7 +18,6 @@ Usage:
 
 from __future__ import annotations
 
-import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -48,8 +47,9 @@ class TrainingConfig:
     gradient_accumulation_steps: int = 4
     max_train_steps: int = 50000
     warmup_steps: int = 500
-    mixed_precision: str = "fp16"
+    mixed_precision: str = "bf16"
     seed: int = 42
+    ema_decay: float = 0.9999
 
     # Optimizer
     optimizer: str = "adamw"  # "adamw", "adam8bit", "prodigy"
@@ -62,15 +62,23 @@ class TrainingConfig:
     lr_scheduler: str = "cosine"
     lr_scheduler_kwargs: dict[str, Any] = field(default_factory=dict)
 
+    # Logging intervals
+    log_every: int = 100
+    sample_every: int = 1000
+
     # Phase B specific
     identity_loss_weight: float = 0.1
     perceptual_loss_weight: float = 0.05
     use_differentiable_arcface: bool = False
     arcface_weights_path: str | None = None
 
+    # Loss weights (alternative to individual weights)
+    loss_weights: dict[str, float] = field(default_factory=dict)
+
     # Checkpointing
     save_every_n_steps: int = 5000
     resume_from_checkpoint: str | None = None
+    resume_phase_a: str | None = None
 
     # Validation
     validate_every_n_steps: int = 2500
@@ -81,9 +89,9 @@ class TrainingConfig:
 class DataConfig:
     """Dataset configuration."""
 
-    train_dir: str = "data/training"
-    val_dir: str = "data/validation"
-    test_dir: str = "data/test"
+    train_dir: str = "data/training_combined"
+    val_dir: str = "data/splits/val"
+    test_dir: str = "data/splits/test"
     image_size: int = 512
     num_workers: int = 4
     pin_memory: bool = True
@@ -92,6 +100,8 @@ class DataConfig:
     random_flip: bool = True
     random_rotation: float = 5.0  # degrees
     color_jitter: float = 0.1
+    clinical_augment: bool = False
+    geometric_augment: bool = True
 
     # Procedure filtering
     procedures: list[str] = field(
@@ -154,6 +164,7 @@ class WandbConfig:
     entity: str | None = None
     run_name: str | None = None
     tags: list[str] = field(default_factory=list)
+    mode: str = "online"  # "online", "offline", "disabled"
 
 
 @dataclass
@@ -161,7 +172,7 @@ class SlurmConfig:
     """SLURM job submission parameters."""
 
     partition: str = "batch_gpu"
-    account: str = os.environ.get("SLURM_ACCOUNT", "default_gpu")
+    account: str = ""  # Set via YAML or SLURM_ACCOUNT env var
     gpu_type: str = "nvidia_rtx_a6000"
     num_gpus: int = 1
     mem: str = "48G"
@@ -190,7 +201,7 @@ class ExperimentConfig:
 
     experiment_name: str = "default"
     description: str = ""
-    version: str = "0.3.0"
+    version: str = "0.3.2"
 
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
@@ -217,7 +228,7 @@ class ExperimentConfig:
         return cls(
             experiment_name=raw.get("experiment_name", "default"),
             description=raw.get("description", ""),
-            version=raw.get("version", "0.3.0"),
+            version=raw.get("version", "0.3.2"),
             model=_from_dict(ModelConfig, raw.get("model", {})),
             training=_from_dict(TrainingConfig, raw.get("training", {})),
             data=_from_dict(DataConfig, raw.get("data", {})),
@@ -242,20 +253,41 @@ class ExperimentConfig:
         return asdict(self)
 
 
+_FIELD_ALIASES: dict[str, str] = {
+    # YAML name -> dataclass field name
+    "max_steps": "max_train_steps",
+    "save_interval": "save_every_n_steps",
+    "sample_interval": "sample_every",
+    "log_interval": "log_every",
+    "adam_weight_decay": "weight_decay",
+    "lr_warmup_steps": "warmup_steps",
+    "resume_from": "resume_from_checkpoint",
+}
+
+
 def _from_dict(cls: type, d: dict) -> Any:
-    """Create a dataclass from a dict, ignoring unknown keys."""
+    """Create a dataclass from a dict, ignoring unknown keys.
+
+    Supports field aliases so YAML configs using train_controlnet.py-style
+    names (e.g. max_steps) map to dataclass fields (max_train_steps).
+    """
     import dataclasses
 
     field_map = {f.name: f for f in dataclasses.fields(cls)}
     filtered = {}
     for k, v in d.items():
-        if k not in field_map:
+        # Resolve aliases
+        canonical = _FIELD_ALIASES.get(k, k)
+        if canonical not in field_map:
+            continue
+        # Don't overwrite if the canonical name was already set explicitly
+        if canonical in filtered:
             continue
         # Convert lists back to tuples where the field type is tuple
-        f = field_map[k]
+        f = field_map[canonical]
         if isinstance(v, list) and "tuple" in str(f.type):
             v = tuple(v)
-        filtered[k] = v
+        filtered[canonical] = v
     return cls(**filtered)
 
 
@@ -288,12 +320,14 @@ def load_config(
         for key, value in overrides.items():
             parts = key.split(".")
             obj = config
+            resolved = True
             for part in parts[:-1]:
                 if hasattr(obj, part):
                     obj = getattr(obj, part)
                 else:
+                    resolved = False
                     break
-            if hasattr(obj, parts[-1]):
+            if resolved and hasattr(obj, parts[-1]):
                 setattr(obj, parts[-1], value)
 
     return config

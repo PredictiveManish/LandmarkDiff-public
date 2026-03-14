@@ -23,8 +23,8 @@ class LossWeights:
 
     diffusion: float = 1.0
     landmark: float = 0.1
-    identity: float = 0.05
-    perceptual: float = 0.1
+    identity: float = 0.1
+    perceptual: float = 0.05
 
 
 class DiffusionLoss:
@@ -160,7 +160,10 @@ class IdentityLoss:
         # Resize to 112x112 for ArcFace
         pred_112 = F.interpolate(pred_crop, size=(112, 112), mode="bilinear", align_corners=False)
         target_112 = F.interpolate(
-            target_crop, size=(112, 112), mode="bilinear", align_corners=False
+            target_crop,
+            size=(112, 112),
+            mode="bilinear",
+            align_corners=False,
         )
 
         # Normalize to [-1, 1]
@@ -241,27 +244,25 @@ class PerceptualLoss:
     ) -> torch.Tensor:
         self._ensure_loaded(pred.device)
 
-        # Invert mask: we want loss OUTSIDE surgical region
-        outside_mask = 1 - mask
-
-        # Erode outside_mask to exclude boundary pixels — avoids artificial
-        # edge features where masked (0) meets unmasked (non-zero) values
-        erode_kernel = 5
-        if outside_mask.shape[-1] >= erode_kernel and outside_mask.shape[-2] >= erode_kernel:
-            outside_mask = -F.max_pool2d(
-                -outside_mask,
-                kernel_size=erode_kernel,
-                stride=1,
-                padding=erode_kernel // 2,
-            )
-
-        # Normalize to [-1, 1] for LPIPS FIRST, then mask
+        # Normalize to [-1, 1] for LPIPS
         pred_norm = pred * 2 - 1
         target_norm = target * 2 - 1
 
-        # Apply mask after normalization (masked regions become 0, not -1)
-        pred_norm = pred_norm * outside_mask
-        target_norm = target_norm * outside_mask
+        # When mask is all-ones (no mask file available), compute on full image.
+        # Otherwise invert mask to get loss OUTSIDE the surgical region only.
+        has_mask = mask.sum() < mask.numel() * 0.99
+        if has_mask:
+            outside_mask = 1 - mask
+            erode_kernel = 5
+            if outside_mask.shape[-1] >= erode_kernel and outside_mask.shape[-2] >= erode_kernel:
+                outside_mask = -F.max_pool2d(
+                    -outside_mask,
+                    kernel_size=erode_kernel,
+                    stride=1,
+                    padding=erode_kernel // 2,
+                )
+            pred_norm = pred_norm * outside_mask
+            target_norm = target_norm * outside_mask
 
         if self._lpips == "unavailable":
             # Fallback: simple L1 loss

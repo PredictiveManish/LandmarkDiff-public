@@ -11,9 +11,13 @@ Supports MPS (Apple Silicon), CUDA, and CPU backends.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from landmarkdiff.clinical import ClinicalFlags
 
 import cv2
 import numpy as np
@@ -24,9 +28,6 @@ from landmarkdiff.landmarks import FaceLandmarks, extract_landmarks, render_land
 from landmarkdiff.manipulation import apply_procedure_preset
 from landmarkdiff.masking import generate_surgical_mask, mask_to_3channel
 from landmarkdiff.synthetic.tps_warp import warp_image_tps
-
-if TYPE_CHECKING:
-    from landmarkdiff.clinical import ClinicalFlags
 
 
 def get_device() -> torch.device:
@@ -68,6 +69,16 @@ PROCEDURE_PROMPTS: dict[str, str] = {
     ),
     "orthognathic": (
         "clinical photograph, patient face, balanced jaw and chin proportions, "
+        "realistic skin pores and texture, sharp focus, studio lighting, "
+        "DSLR quality, natural skin color"
+    ),
+    "brow_lift": (
+        "clinical photograph, patient face, elevated brow position, smooth forehead, "
+        "realistic skin pores and texture, sharp focus, studio lighting, "
+        "DSLR quality, natural skin color"
+    ),
+    "mentoplasty": (
+        "clinical photograph, patient face, refined chin contour, balanced lower face, "
         "realistic skin pores and texture, sharp focus, studio lighting, "
         "DSLR quality, natural skin color"
     ),
@@ -154,7 +165,8 @@ class LandmarkDiffPipeline:
     """End-to-end pipeline: image -> landmarks -> manipulate -> generate.
 
     Modes:
-    - 'controlnet': CrucibleAI/ControlNetMediaPipeFace + SD1.5
+    - 'controlnet': CrucibleAI/ControlNetMediaPipeFace + SD1.5 (30 steps)
+    - 'controlnet_fast': ControlNet + LCM-LoRA (4 steps, CPU-viable)
     - 'controlnet_ip': ControlNet + IP-Adapter for identity preservation
     - 'img2img': SD1.5 img2img with mask compositing
     - 'tps': Pure geometric TPS warp (no diffusion, instant)
@@ -165,6 +177,9 @@ class LandmarkDiffPipeline:
     IP_ADAPTER_SUBFOLDER = "models"
     IP_ADAPTER_WEIGHT_NAME = "ip-adapter-plus-face_sd15.bin"
     IP_ADAPTER_SCALE_DEFAULT = 0.6
+
+    # LCM-LoRA for fast inference (2-4 steps instead of 30)
+    LCM_LORA_REPO = "latent-consistency/lcm-lora-sdv1-5"
 
     def __init__(
         self,
@@ -204,22 +219,23 @@ class LandmarkDiffPipeline:
 
         if base_model_id:
             self.base_model_id = base_model_id
-        elif mode in ("controlnet", "controlnet_ip"):
-            self.base_model_id = "runwayml/stable-diffusion-v1-5"
         else:
             self.base_model_id = "runwayml/stable-diffusion-v1-5"
 
         self.controlnet_id = controlnet_id
         self._pipe = None
         self._ip_adapter_loaded = False
+        self._lcm_loaded = False
 
     def load(self) -> None:
         if self.mode == "tps":
             print("TPS mode — no model to load")
             return
-        if self.mode in ("controlnet", "controlnet_ip"):
+        if self.mode in ("controlnet", "controlnet_ip", "controlnet_fast"):
             self._load_controlnet()
-            if self.mode == "controlnet_ip":
+            if self.mode == "controlnet_fast":
+                self._load_lcm_lora()
+            elif self.mode == "controlnet_ip":
                 self._load_ip_adapter()
         else:
             self._load_img2img()
@@ -230,6 +246,9 @@ class LandmarkDiffPipeline:
             DPMSolverMultistepScheduler,
             StableDiffusionControlNetPipeline,
         )
+
+        _local_only = os.environ.get("HF_HUB_OFFLINE", "0") == "1"
+        _kw: dict = {"local_files_only": True} if _local_only else {}
 
         if self.controlnet_checkpoint:
             # Load fine-tuned ControlNet from local checkpoint
@@ -248,6 +267,7 @@ class LandmarkDiffPipeline:
                 self.controlnet_id,
                 subfolder="diffusion_sd15",
                 torch_dtype=self.dtype,
+                **_kw,
             )
         print(f"Loading base model from {self.base_model_id}...")
         self._pipe = StableDiffusionControlNetPipeline.from_pretrained(
@@ -256,6 +276,7 @@ class LandmarkDiffPipeline:
             torch_dtype=self.dtype,
             safety_checker=None,
             requires_safety_checker=False,
+            **_kw,
         )
         # DPM++ 2M Karras — produces more photorealistic output than UniPC
         self._pipe.scheduler = DPMSolverMultistepScheduler.from_config(
@@ -267,6 +288,30 @@ class LandmarkDiffPipeline:
         if hasattr(self._pipe, "vae") and self._pipe.vae is not None:
             self._pipe.vae.config.force_upcast = True
         self._apply_device_optimizations()
+
+    def _load_lcm_lora(self) -> None:
+        """Load LCM-LoRA for fast 4-step inference.
+
+        LCM-LoRA (Latent Consistency Model) distills the denoising process
+        into 2-4 steps, making CPU inference viable (~3-8s vs ~60s+).
+        Replaces the scheduler with LCMScheduler for consistency sampling.
+        """
+        if self._pipe is None:
+            raise RuntimeError("Base pipeline must be loaded before LCM-LoRA")
+        try:
+            from diffusers import LCMScheduler
+
+            print(f"Loading LCM-LoRA from {self.LCM_LORA_REPO}...")
+            _local_only = os.environ.get("HF_HUB_OFFLINE", "0") == "1"
+            _kw: dict = {"local_files_only": True} if _local_only else {}
+            self._pipe.load_lora_weights(self.LCM_LORA_REPO, **_kw)
+            self._pipe.scheduler = LCMScheduler.from_config(self._pipe.scheduler.config)
+            self._lcm_loaded = True
+            print("LCM-LoRA loaded — 4-step inference enabled")
+        except Exception as e:
+            print(f"WARNING: LCM-LoRA load failed: {e}")
+            print("Falling back to standard scheduler (30 steps)")
+            self._lcm_loaded = False
 
     def _load_ip_adapter(self) -> None:
         """Load IP-Adapter for identity-preserving generation.
@@ -297,12 +342,16 @@ class LandmarkDiffPipeline:
             StableDiffusionImg2ImgPipeline,
         )
 
+        _local_only = os.environ.get("HF_HUB_OFFLINE", "0") == "1"
+        _kw: dict = {"local_files_only": True} if _local_only else {}
+
         print(f"Loading SD1.5 img2img from {self.base_model_id}...")
         self._pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
             self.base_model_id,
             torch_dtype=self.dtype,
             safety_checker=None,
             requires_safety_checker=False,
+            **_kw,
         )
         self._pipe.scheduler = DPMSolverMultistepScheduler.from_config(self._pipe.scheduler.config)
         self._apply_device_optimizations()
@@ -378,7 +427,13 @@ class LandmarkDiffPipeline:
                     confidence=face.confidence,
                 )
                 manipulation_mode = "displacement_model"
-            except Exception:
+            except Exception as exc:
+                import warnings
+
+                warnings.warn(
+                    f"Displacement model failed, falling back to preset: {exc}",
+                    stacklevel=2,
+                )
                 manipulated = apply_procedure_preset(
                     face,
                     procedure,
@@ -414,7 +469,11 @@ class LandmarkDiffPipeline:
 
         if self.mode == "tps":
             raw_output = tps_warped
-        elif self.mode in ("controlnet", "controlnet_ip"):
+        elif self.mode in ("controlnet", "controlnet_ip", "controlnet_fast"):
+            # LCM mode: override to 4 steps, low guidance (LCM works best with cfg=1-2)
+            if self._lcm_loaded:
+                num_inference_steps = min(num_inference_steps, 4)
+                guidance_scale = min(guidance_scale, 1.5)
             ip_image = numpy_to_pil(image_512) if self._ip_adapter_loaded else None
             raw_output = self._generate_controlnet(
                 image_512,
@@ -474,6 +533,7 @@ class LandmarkDiffPipeline:
             "mode": self.mode,
             "view_info": view_info,
             "ip_adapter_active": self._ip_adapter_loaded,
+            "lcm_active": self._lcm_loaded,
             "identity_check": identity_check,
             "restore_used": restore_used,
             "manipulation_mode": manipulation_mode,
@@ -637,7 +697,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--mode",
         default="img2img",
-        choices=["img2img", "controlnet", "controlnet_ip", "tps"],
+        choices=["img2img", "controlnet", "controlnet_ip", "controlnet_fast", "tps"],
     )
     parser.add_argument("--ip-adapter-scale", type=float, default=0.6)
     parser.add_argument(

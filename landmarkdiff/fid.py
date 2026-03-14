@@ -28,6 +28,7 @@ try:
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
+    Dataset = object  # type: ignore[misc,assignment]
 
 
 def _load_inception_v3() -> Any:
@@ -42,85 +43,90 @@ def _load_inception_v3() -> Any:
     return model
 
 
-# Guard torch-dependent class and function definitions so the module
-# can be imported safely when torch is not installed.
-if HAS_TORCH:
+class ImageFolderDataset(Dataset):
+    """Simple dataset that loads images from a directory."""
 
-    class ImageFolderDataset(Dataset):  # type: ignore[misc]
-        """Simple dataset that loads images from a directory."""
+    def __init__(self, directory: str | Path, image_size: int = 299):
+        self.directory = Path(directory)
+        exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+        self.files = sorted(
+            f for f in self.directory.iterdir() if f.suffix.lower() in exts and f.is_file()
+        )
+        self.image_size = image_size
 
-        def __init__(self, directory: str | Path, image_size: int = 299):
-            self.directory = Path(directory)
-            exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-            self.files = sorted(
-                f for f in self.directory.iterdir() if f.suffix.lower() in exts and f.is_file()
-            )
-            self.image_size = image_size
+    def __len__(self) -> int:
+        return len(self.files)
 
-        def __len__(self) -> int:
-            return len(self.files)
+    def __getitem__(self, idx: int) -> Any:
+        import cv2
 
-        def __getitem__(self, idx: int) -> Any:
-            import cv2
+        img = cv2.imread(str(self.files[idx]))
+        if img is None:
+            # Return zeros if image can't be loaded
+            return torch.zeros(3, self.image_size, self.image_size)
+        img = cv2.resize(img, (self.image_size, self.image_size))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # Normalize to [0, 1] then ImageNet normalize
+        t = torch.from_numpy(img.astype(np.float32) / 255.0).permute(2, 0, 1)
+        t = _imagenet_normalize(t)
+        return t
 
-            img = cv2.imread(str(self.files[idx]))
-            if img is None:
-                # Return zeros if image can't be loaded
-                return torch.zeros(3, self.image_size, self.image_size)
+
+class NumpyArrayDataset(Dataset):
+    """Dataset wrapping a list of numpy arrays."""
+
+    def __init__(self, images: list[np.ndarray], image_size: int = 299):
+        self.images = images
+        self.image_size = image_size
+
+    def __len__(self) -> int:
+        return len(self.images)
+
+    def __getitem__(self, idx: int) -> Any:
+        import cv2
+
+        img = self.images[idx]
+        if img.shape[:2] != (self.image_size, self.image_size):
             img = cv2.resize(img, (self.image_size, self.image_size))
+        if img.ndim == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+        elif img.shape[2] == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
+        elif img.shape[2] == 3:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            # Normalize to [0, 1] then ImageNet normalize
-            t = torch.from_numpy(img.astype(np.float32) / 255.0).permute(2, 0, 1)
-            t = _imagenet_normalize(t)
-            return t
+        t = torch.from_numpy(img.astype(np.float32) / 255.0).permute(2, 0, 1)
+        t = _imagenet_normalize(t)
+        return t
 
-    class NumpyArrayDataset(Dataset):  # type: ignore[misc]
-        """Dataset wrapping a list of numpy arrays."""
 
-        def __init__(self, images: list[np.ndarray], image_size: int = 299):
-            self.images = images
-            self.image_size = image_size
+def _imagenet_normalize(t: torch.Tensor) -> torch.Tensor:
+    """Apply ImageNet normalization."""
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+    return (t - mean) / std
 
-        def __len__(self) -> int:
-            return len(self.images)
 
-        def __getitem__(self, idx: int) -> Any:
-            import cv2
-
-            img = self.images[idx]
-            if img.shape[:2] != (self.image_size, self.image_size):
-                img = cv2.resize(img, (self.image_size, self.image_size))
-            if img.shape[2] == 3:
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            t = torch.from_numpy(img.astype(np.float32) / 255.0).permute(2, 0, 1)
-            t = _imagenet_normalize(t)
-            return t
-
-    def _imagenet_normalize(t: Any) -> Any:
-        """Apply ImageNet normalization."""
-        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-        return (t - mean) / std
-
-    @torch.no_grad()
-    def _extract_features(
-        model: Any,
-        dataloader: Any,
-        device: Any,
-    ) -> np.ndarray:
-        """Extract InceptionV3 pool3 features from a dataloader."""
-        features = []
+def _extract_features(
+    model: nn.Module,
+    dataloader: DataLoader,
+    device: torch.device,
+) -> np.ndarray:
+    """Extract InceptionV3 pool3 features from a dataloader."""
+    features = []
+    with torch.no_grad():
         for batch in dataloader:
             batch = batch.to(device)
             feat = model(batch)
             if isinstance(feat, tuple):
                 feat = feat[0]
             features.append(feat.cpu().numpy())
-        return np.concatenate(features, axis=0)
+    return np.concatenate(features, axis=0)
 
 
 def _compute_statistics(features: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Compute mean and covariance of feature vectors."""
+    if features.shape[0] < 2:
+        raise ValueError(f"FID requires at least 2 images, got {features.shape[0]}")
     mu = np.mean(features, axis=0)
     sigma = np.cov(features, rowvar=False)
     return mu, sigma
@@ -146,7 +152,7 @@ def _calculate_fid(
         covmean = covmean.real
 
     fid = diff @ diff + np.trace(sigma1 + sigma2 - 2 * covmean)
-    return float(fid)
+    return float(max(fid, 0.0))
 
 
 def compute_fid_from_dirs(
