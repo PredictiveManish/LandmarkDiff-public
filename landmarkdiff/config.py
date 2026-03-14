@@ -18,6 +18,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -160,7 +161,7 @@ class SlurmConfig:
     """SLURM job submission parameters."""
 
     partition: str = "batch_gpu"
-    account: str = "csb_gpu_acc"
+    account: str = os.environ.get("SLURM_ACCOUNT", "default_gpu")
     gpu_type: str = "nvidia_rtx_a6000"
     num_gpus: int = 1
     mem: str = "48G"
