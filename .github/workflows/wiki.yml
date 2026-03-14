@@ -18,18 +18,13 @@ jobs:
           REPO="${{ github.repository }}"
           CLONE_URL="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.wiki.git"
           
-          if git clone "$CLONE_URL" wiki-dir 2>/dev/null; then
-            echo "Cloned existing wiki repo"
-            cd wiki-dir
-            rm -f *.md
-          else
-            echo "Wiki repo does not exist, bootstrapping..."
-            mkdir -p wiki-dir
-            cd wiki-dir
-            git init
-            git remote add origin "$CLONE_URL"
+          if \! git clone "$CLONE_URL" wiki-dir 2>/dev/null; then
+            echo "::error::Wiki not initialized. Create the first page at https://github.com/${REPO}/wiki/_new then re-run this workflow."
+            exit 1
           fi
           
+          cd wiki-dir
+          rm -f *.md
           cp ../docs/wiki/*.md .
           git config user.name "dreamlessx"
           git config user.email "dreamlessx@users.noreply.github.com"
@@ -38,7 +33,6 @@ jobs:
             echo "No wiki changes."
           else
             git commit -m "update wiki pages"
-            git branch -M master
-            git push -u origin master --force
-            echo "Wiki updated successfully."
+            git push origin master
+            echo "Wiki updated."
           fi
