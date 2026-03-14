@@ -4,16 +4,41 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch 2.1+](https://img.shields.io/badge/pytorch-2.1+-ee4c2c.svg)](https://pytorch.org/)
-[![codecov](https://codecov.io/gh/dreamlessx/LandmarkDiff-public/branch/main/graph/badge.svg)](https://codecov.io/gh/dreamlessx/LandmarkDiff-public)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![Docs](https://img.shields.io/badge/docs-latest-green.svg)](docs/)
 
 Photorealistic facial surgery outcome prediction from standard clinical photography, powered by anatomically-conditioned latent diffusion.
 
-LandmarkDiff takes a patient's pre-operative photograph and a specified surgical procedure, then generates a photorealistic prediction of what that patient will look like post-operatively. The entire pipeline runs on a single 2D photo - no 3D CT scans, no depth sensors, no multi-view capture required.
+<table>
+<tr>
+<td width="50%">
 
-It works by extracting MediaPipe's 478-point face mesh from the input photo, applying procedure-specific Gaussian RBF deformations calibrated from anthropometric surgical data, rendering the deformed mesh as a tessellation wireframe, and feeding that wireframe into a ControlNet-conditioned Stable Diffusion 1.5 backbone to synthesize the predicted face. The output is composited back onto the original image using Laplacian pyramid blending with feathered surgical masks, then refined through neural face restoration and identity verification.
+**Input:** Single 2D photo (phone camera or clinical)
+**Output:** Photorealistic post-op prediction
+**No** 3D scans, depth sensors, or multi-view rigs
+
+</td>
+<td width="50%">
+
+**4 procedures** -- rhinoplasty, blepharoplasty, rhytidectomy, orthognathic
+**4 inference modes** -- TPS (CPU), img2img, ControlNet, ControlNet+IP
+**5 clinical flags** -- vitiligo, Bell's palsy, keloid, Ehlers-Danlos, Fitzpatrick-stratified eval
+
+</td>
+</tr>
+</table>
+
+LandmarkDiff extracts MediaPipe's 478-point face mesh from the input photo, applies procedure-specific Gaussian RBF deformations calibrated from anthropometric surgical data, renders the deformed mesh as a tessellation wireframe, and feeds that wireframe into a ControlNet-conditioned Stable Diffusion 1.5 backbone to synthesize the predicted face. The output is composited back onto the original image using Laplacian pyramid blending with feathered surgical masks, then refined through neural face restoration and identity verification.
 
 > **Paper:** "LandmarkDiff: Anatomically-Conditioned Latent Diffusion for Photorealistic Facial Surgery Outcome Prediction," targeting MICCAI 2026.
+
+```bash
+# Quick install
+pip install -e ".[train,eval,app,dev]"
+
+# Run a prediction
+python scripts/run_inference.py photo.jpg --procedure rhinoplasty --intensity 60 --mode controlnet
+```
 
 ---
 
@@ -97,30 +122,27 @@ You can define custom procedures by specifying which landmarks to move, how far,
 LandmarkDiff is a five-stage pipeline. Each stage is independently testable and swappable.
 
 ```
-                         Input Photo (512x512)
-                                |
-                    [1] MediaPipe Face Mesh
-                    478 landmarks, 3D coords
-                                |
-                    [2] Gaussian RBF Deformation
-                    Procedure-specific displacement
-                    vectors scaled by intensity (0-100%)
-                                |
-                    [3] Conditioning Generation
-                    2556-edge tessellation wireframe
-                    + adaptive Canny edges + mask
-                                |
-                    [4] ControlNet + Stable Diffusion 1.5
-                    CrucibleAI/ControlNetMediaPipeFace
-                    conditioned latent space generation
-                                |
-                    [5] Post-Processing
-                    Laplacian pyramid blend (6 levels)
-                    + CodeFormer face restoration
-                    + Real-ESRGAN background upscale
-                    + ArcFace identity verification
-                                |
-                        Predicted Post-Op Face
+ Input Photo                                                    Predicted Post-Op
+  (512x512)                                                         Face
+     |                                                               ^
+     v                                                               |
+ +-------------------+    +-------------------+    +-------------------+
+ | 1. MediaPipe      |    | 2. Gaussian RBF   |    | 3. Conditioning   |
+ |    Face Mesh      |--->|    Deformation     |--->|    Generation     |
+ |                   |    |                   |    |                   |
+ | 478 landmarks     |    | Procedure-specific |    | 2556-edge wireframe|
+ | 3D coordinates    |    | displacements     |    | + Canny edges     |
+ |                   |    | scaled 0-100%     |    | + surgical mask   |
+ +-------------------+    +-------------------+    +--------+----------+
+                                                            |
+                          +-------------------+    +--------v----------+
+                          | 5. Post-Process   |    | 4. ControlNet +   |
+                          |                   |<---|    Stable Diff 1.5|
+                          | CodeFormer restore|    |                   |
+                          | Real-ESRGAN upscale|    | CrucibleAI/      |
+                          | Laplacian blend   |    | MediaPipeFace     |
+                          | ArcFace verify    |    | conditioned gen   |
+                          +-------------------+    +-------------------+
 ```
 
 ### Stage 1: Landmark Extraction
@@ -183,13 +205,15 @@ Six-step refinement:
 
 Sample outputs are in the [demos/](demos/) directory.
 
-**Pipeline visualizations:**
+**Pipeline visualizations** (Input -> Mesh -> Deformed Mesh -> Surgical Mask -> Result):
 
-![Pipeline visualization](demos/demo_pipeline_0.png)
+<p align="center">
+  <img src="demos/demo_pipeline_0.png" alt="Pipeline example: rhinoplasty prediction showing each stage from input photo to final result" width="100%">
+</p>
 
-![Pipeline visualization](demos/demo_pipeline_1.png)
-
-Step-by-step view of the full pipeline: Input -> Original Mesh -> Manipulated Mesh -> Surgical Mask -> Result.
+<p align="center">
+  <img src="demos/demo_pipeline_1.png" alt="Pipeline example: blepharoplasty prediction showing each stage from input photo to final result" width="100%">
+</p>
 
 ControlNet-generated photorealistic samples will be added after model training completes.
 
