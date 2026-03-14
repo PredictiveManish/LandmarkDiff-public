@@ -45,7 +45,7 @@ class TestGradientAccumulation:
             loss.backward()
 
         # Gradients should match
-        for p_ref, p_acc in zip(model_ref.parameters(), model.parameters(), strict=False):
+        for p_ref, p_acc in zip(model_ref.parameters(), model.parameters()):
             torch.testing.assert_close(p_ref.grad, p_acc.grad, atol=1e-5, rtol=1e-5)
 
     def test_accumulation_loss_value(self):

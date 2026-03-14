@@ -554,24 +554,24 @@ def process_image(image_rgb, procedure, intensity):
 
         sym_arrow = "+" if sym_delta > 0 else ""
         info_lines = [
-            f"--- Procedure ---",
+            "--- Procedure ---",
             f"  Type:          {procedure.replace('_', ' ').title()}",
             f"  Intensity:     {intensity:.0f}%",
             f"  Description:   {PROCEDURE_INFO.get(procedure, '')}",
-            f"",
-            f"--- Detection ---",
+            "",
+            "--- Detection ---",
             f"  Landmarks:     {len(face.landmarks)} points",
             f"  Confidence:    {face.confidence:.2f}",
             f"  Avg shift:     {displacement:.1f} px",
-            f"",
-            f"--- Symmetry ---",
+            "",
+            "--- Symmetry ---",
             f"  Before:        {pre_overall:.1f} / 100",
             f"  After:         {post_overall:.1f} / 100",
             f"  Change:        {sym_arrow}{sym_delta:.1f}",
-            f"",
-            f"--- Performance ---",
+            "",
+            "--- Performance ---",
             f"  Time:          {elapsed:.2f}s",
-            f"  Mode:          TPS (CPU)",
+            "  Mode:          TPS (CPU)",
         ]
         info = "\n".join(info_lines)
         return wireframe_rgb, mask_vis, composited_rgb, image_rgb_512, info
@@ -701,8 +701,7 @@ with gr.Blocks(
                 )
                 # Show a brief description for each procedure
                 _proc_desc_md = " | ".join(
-                    f"**{k.replace('_', ' ').title()}**: {v}"
-                    for k, v in PROCEDURE_INFO.items()
+                    f"**{k.replace('_', ' ').title()}**: {v}" for k, v in PROCEDURE_INFO.items()
                 )
                 gr.Markdown(
                     f"<div style='font-size:0.82em;color:#666;line-height:1.5;'>"
@@ -741,12 +740,18 @@ with gr.Blocks(
 
         with gr.Accordion("Photo Tips for Best Results", open=False):
             gr.Markdown(
-                "- **Front-facing**: Use a straight-on frontal photo, not a side profile\n"
-                "- **Good lighting**: Even, natural lighting works best. Avoid harsh shadows\n"
-                "- **Neutral expression**: Keep a relaxed, neutral face for accurate landmark detection\n"
-                "- **No obstructions**: Remove glasses, hats, or anything covering the face\n"
-                "- **Resolution**: At least 256x256 pixels. The image will be resized to 512x512 internally\n"
-                "- **Single face**: Make sure only one face is clearly visible in the frame"
+                "- **Front-facing**: Use a straight-on frontal photo, "
+                "not a side profile\n"
+                "- **Good lighting**: Even, natural lighting works best. "
+                "Avoid harsh shadows\n"
+                "- **Neutral expression**: Keep a relaxed, neutral face "
+                "for accurate landmark detection\n"
+                "- **No obstructions**: Remove glasses, hats, or anything "
+                "covering the face\n"
+                "- **Resolution**: At least 256x256 pixels. The image will "
+                "be resized to 512x512 internally\n"
+                "- **Single face**: Make sure only one face is clearly "
+                "visible in the frame"
             )
 
         outputs = [out_wireframe, out_mask, out_result, out_original, info_box]

@@ -170,7 +170,7 @@ class TestRandomSearch:
         s2 = HyperparamSearch(self._make_space(), seed=123)
         t1 = s1.generate_trials(strategy="random", n_trials=5)
         t2 = s2.generate_trials(strategy="random", n_trials=5)
-        for a, b in zip(t1, t2, strict=False):
+        for a, b in zip(t1, t2):
             assert a.config == b.config
 
 

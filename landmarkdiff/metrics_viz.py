@@ -141,7 +141,7 @@ class MetricsVisualizer:
         if n_metrics == 1:
             axes = [axes]
 
-        for ax, metric in zip(axes, metrics, strict=False):
+        for ax, metric in zip(axes, metrics):
             values = [metrics_by_procedure[p].get(metric, 0) for p in procedures]
             colors = [self.COLORS.get(p, "#999999") for p in procedures]
 
@@ -156,7 +156,7 @@ class MetricsVisualizer:
             ax.set_title(self.METRIC_LABELS.get(metric, metric))
 
             # Add value labels on bars
-            for bar, val in zip(bars, values, strict=False):
+            for bar, val in zip(bars, values):
                 ax.text(
                     bar.get_x() + bar.get_width() / 2,
                     bar.get_height(),
@@ -348,7 +348,7 @@ class MetricsVisualizer:
         )
 
         colors = [self.COLORS.get(g, "#4C72B0") for g in groups]
-        for patch, color in zip(bp["boxes"], colors, strict=False):
+        for patch, color in zip(bp["boxes"], colors):
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
 
@@ -364,7 +364,7 @@ class MetricsVisualizer:
         ax.set_title(title, fontweight="bold")
 
         # Add sample count annotations
-        for i, (_g, vals) in enumerate(zip(groups, data, strict=False)):
+        for i, (_g, vals) in enumerate(zip(groups, data)):
             ax.text(
                 i + 1,
                 ax.get_ylim()[0],

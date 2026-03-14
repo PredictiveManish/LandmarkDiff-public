@@ -20,7 +20,7 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install lint tools
-        run: pip install ruff
+        run: pip install ruff==0.15.6
       - name: Lint
         run: ruff check landmarkdiff/ scripts/ tests/
       - name: Format check
@@ -62,6 +62,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           file: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
       - name: Upload test artifacts on failure
         if: failure()

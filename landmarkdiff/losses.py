@@ -175,7 +175,7 @@ class IdentityLoss:
         target_emb, target_valid = self._extract_embedding(target_norm)
 
         # Only compute loss for samples where both faces were detected
-        valid = [p and t for p, t in zip(pred_valid, target_valid, strict=False)]
+        valid = [p and t for p, t in zip(pred_valid, target_valid)]
         if not any(valid):
             return torch.tensor(0.0, device=pred_image.device)
 

@@ -242,7 +242,7 @@ class HyperparamSearch:
 
         trials = []
         for combo in itertools.product(*param_values):
-            config = dict(zip(param_names, combo, strict=False))
+            config = dict(zip(param_names, combo))
             trial = Trial(
                 trial_id=f"trial_{len(trials):04d}",
                 config=config,

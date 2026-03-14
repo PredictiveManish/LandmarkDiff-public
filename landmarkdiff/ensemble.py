@@ -196,7 +196,7 @@ class EnsembleInference:
 
         # Weighted average
         result = np.zeros_like(outputs[0], dtype=np.float32)
-        for output, weight in zip(outputs, weights, strict=False):
+        for output, weight in zip(outputs, weights):
             result += output.astype(np.float32) * weight
 
         return np.clip(result, 0, 255).astype(np.uint8), scores
