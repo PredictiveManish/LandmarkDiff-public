@@ -175,7 +175,7 @@ class SyntheticPairDataset(Dataset):
             mask_arr = aug_result["mask"]
 
         # Apply clinical augmentation to target only (domain gap closure)
-        if self.clinical_augment and np.random.random() < 0.5:
+        if self.clinical_augment and self._rng.random() < 0.5:
             target_bgr = apply_clinical_augmentation(target_bgr, rng=self._rng)
 
         # Convert BGR→RGB and normalize to [0, 1] tensors
@@ -193,6 +193,7 @@ class SyntheticPairDataset(Dataset):
             "target": target_img,
             "conditioning": conditioning,
             "mask": mask,
+            "procedure": self.get_procedure(idx),
             "idx": idx,
         }
 
@@ -226,6 +227,40 @@ def update_ema(ema_model: torch.nn.Module, model: torch.nn.Module, decay: float 
         ema_p.data.mul_(decay).add_(p.data, alpha=1 - decay)
 
 
+def _select_per_procedure_indices(
+    dataset: Dataset,
+    samples_per_procedure: int = 2,
+) -> list[tuple[int, str]]:
+    """Select sample indices ensuring each procedure type is represented.
+
+    Returns list of (index, procedure_name) tuples.  Falls back to first N
+    indices when the dataset has no procedure metadata.
+    """
+    from collections import defaultdict
+
+    procedure_indices: dict[str, list[int]] = defaultdict(list)
+    if hasattr(dataset, "_sample_procedures") and dataset._sample_procedures:
+        for idx, pair_path in enumerate(dataset.pairs):
+            prefix = pair_path.stem.replace("_input", "")
+            proc = dataset._sample_procedures.get(prefix, "unknown")
+            procedure_indices[proc].append(idx)
+    else:
+        for idx in range(len(dataset)):
+            proc = dataset.get_procedure(idx) if hasattr(dataset, "get_procedure") else "unknown"
+            procedure_indices[proc].append(idx)
+
+    known_procs = {k: v for k, v in procedure_indices.items() if k != "unknown"}
+    if known_procs:
+        procedure_indices = known_procs
+
+    selected: list[tuple[int, str]] = []
+    for proc, indices in sorted(procedure_indices.items()):
+        for i in indices[:samples_per_procedure]:
+            selected.append((i, proc))
+
+    return selected
+
+
 @torch.no_grad()
 def _generate_samples(
     ema_controlnet: torch.nn.Module,
@@ -239,8 +274,13 @@ def _generate_samples(
     output_dir: Path,
     global_step: int,
     num_samples: int = 4,
+    samples_per_procedure: int = 2,
 ) -> None:
-    """Generate sample images using EMA weights for visual monitoring."""
+    """Generate sample images using EMA weights for visual monitoring.
+
+    Selects samples per procedure type so training progress on each
+    procedure can be tracked visually.
+    """
     from diffusers import UniPCMultistepScheduler
 
     sample_dir = output_dir / "samples" / f"step-{global_step}"
@@ -248,19 +288,22 @@ def _generate_samples(
 
     ema_controlnet.eval()
 
-    n = min(num_samples, len(dataset))
-    if n == 0:
+    if len(dataset) == 0:
         return
-    for i in range(n):
-        sample = dataset[i]
+
+    per_proc = _select_per_procedure_indices(dataset, samples_per_procedure)
+    if not per_proc:
+        per_proc = [(i, "unknown") for i in range(min(num_samples, len(dataset)))]
+
+    for sample_num, (idx, proc) in enumerate(per_proc):
+        sample = dataset[idx]
         conditioning = sample["conditioning"].unsqueeze(0).to(device, dtype=weight_dtype)
         target = sample["target"].unsqueeze(0).to(device, dtype=weight_dtype)
 
-        # Encode target to get shape reference
-        latents = vae.encode(target * 2 - 1).latent_dist.sample()
-        latents = latents * vae.config.scaling_factor
+        # Encode target to get shape reference (FP32 for VAE)
+        latents = vae.encode((target * 2 - 1).float()).latent_dist.sample()
+        latents = (latents * vae.config.scaling_factor).to(weight_dtype)
 
-        # Start from pure noise
         noise = torch.randn_like(latents)
         scheduler = UniPCMultistepScheduler.from_config(noise_scheduler.config)
         scheduler.set_timesteps(20, device=device)
@@ -268,40 +311,52 @@ def _generate_samples(
         sample_latents = noise * scheduler.init_noise_sigma
         encoder_hidden_states = text_embeddings[:1]
 
-        for t in scheduler.timesteps:
-            scaled = scheduler.scale_model_input(sample_latents, t)
+        # Use autocast to handle BF16/FP32 dtype mismatches in timestep
+        # embeddings (linear layers are BF16, sinusoidal output is FP32)
+        with torch.autocast("cuda", dtype=weight_dtype):
+            for t in scheduler.timesteps:
+                scaled = scheduler.scale_model_input(sample_latents, t)
 
-            down_samples, mid_sample = ema_controlnet(
-                scaled,
-                t,
-                encoder_hidden_states=encoder_hidden_states,
-                controlnet_cond=conditioning,
-                return_dict=False,
-            )
-            noise_pred = unet(
-                scaled,
-                t,
-                encoder_hidden_states=encoder_hidden_states,
-                down_block_additional_residuals=down_samples,
-                mid_block_additional_residual=mid_sample,
-            ).sample
+                down_samples, mid_sample = ema_controlnet(
+                    scaled,
+                    t,
+                    encoder_hidden_states=encoder_hidden_states,
+                    controlnet_cond=conditioning,
+                    return_dict=False,
+                )
+                noise_pred = unet(
+                    scaled,
+                    t,
+                    encoder_hidden_states=encoder_hidden_states,
+                    down_block_additional_residuals=down_samples,
+                    mid_block_additional_residual=mid_sample,
+                ).sample
 
-            sample_latents = scheduler.step(noise_pred, t, sample_latents).prev_sample
+                sample_latents = scheduler.step(
+                    noise_pred,
+                    t,
+                    sample_latents,
+                ).prev_sample
 
-        # Decode
-        decoded = vae.decode(sample_latents / vae.config.scaling_factor).sample
+        # Decode (VAE needs float32)
+        decoded = vae.decode((sample_latents / vae.config.scaling_factor).float()).sample
         decoded = ((decoded + 1) / 2).clamp(0, 1)
 
-        # Save as PNG (cast to float32 — BF16 can't convert to numpy)
         img = (decoded[0].float().permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
         tgt = (target[0].float().permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
         cond = (conditioning[0].float().permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
 
-        # Side-by-side: conditioning | generated | target
         comparison = np.hstack([cond, img, tgt])
-        Image.fromarray(comparison).save(sample_dir / f"sample_{i}.png")
+        proc_tag = proc.replace(" ", "_")
+        Image.fromarray(comparison).save(sample_dir / f"sample_{sample_num:02d}_{proc_tag}.png")
 
-    logger.info("Samples saved: %s", sample_dir)
+    procedures_sampled = sorted(set(p for _, p in per_proc))
+    logger.info(
+        "Samples saved: %s (%d images, procedures: %s)",
+        sample_dir,
+        len(per_proc),
+        ", ".join(procedures_sampled),
+    )
     ema_controlnet.train()
 
 
@@ -324,6 +379,9 @@ def train(
     resume_phaseA: str | None = None,
     clinical_augment: bool = False,
     geometric_augment: bool = True,
+    identity_weight: float | None = None,
+    perceptual_weight: float | None = None,
+    val_dir: str | None = None,
     seed: int = 42,
     wandb_project: str = "landmarkdiff",
     wandb_dir: str | None = None,
@@ -601,12 +659,32 @@ def train(
     try:
         from landmarkdiff.validation import ValidationCallback
 
+        val_dataset = dataset
+        if val_dir:
+            val_path = Path(val_dir)
+            if not val_path.is_absolute():
+                val_path = Path(__file__).resolve().parent.parent / val_dir
+            if val_path.exists() and list(val_path.glob("*_input.png")):
+                val_dataset = SyntheticPairDataset(str(val_path), resolution=512)
+                if _IS_MAIN:
+                    logger.info("Using validation set: %s (%d pairs)", val_dir, len(val_dataset))
+
         val_callback = ValidationCallback(
-            val_dataset=dataset,
+            val_dataset=val_dataset,
             output_dir=out / "validation",
-            num_samples=min(8, len(dataset)),
+            num_samples=min(8, len(val_dataset)),
+            samples_per_procedure=2,
         )
-        logger.info("Validation callback enabled (%d samples)", val_callback.num_samples)
+        n_procs = (
+            len(val_callback._procedure_indices)
+            if hasattr(val_callback, "_procedure_indices")
+            else 0
+        )
+        logger.info(
+            "Validation callback enabled (%d samples, %d procedures)",
+            val_callback.num_samples,
+            n_procs,
+        )
     except ImportError:
         logger.warning("Validation callback unavailable (missing dependencies)")
 
@@ -616,13 +694,15 @@ def train(
     if phase == "B":
         from landmarkdiff.losses import CombinedLoss, LossWeights
 
-        loss_weights = LossWeights()
+        w_id = identity_weight if identity_weight is not None else 0.1
+        w_perc = perceptual_weight if perceptual_weight is not None else 0.05
+        loss_weights = LossWeights(identity=w_id, perceptual=w_perc)
         combined_loss = CombinedLoss(
             weights=loss_weights,
             phase="B",
             use_differentiable_arcface=True,
         )
-        logger.info("Phase B: identity (PyTorch ArcFace) + perceptual (LPIPS) losses enabled")
+        logger.info("Phase B losses: identity=%.3f, perceptual=%.3f", w_id, w_perc)
 
     # ─── Curriculum sampling weights ───
     # Pre-compute per-sample procedure weights for curriculum-based sampling.
@@ -691,10 +771,10 @@ def train(
         target = batch["target"].to(device, dtype=weight_dtype)
         conditioning = batch["conditioning"].to(device, dtype=weight_dtype)
 
-        # Encode target to latents
+        # Encode target to latents (cast to FP32 for VAE, then back)
         with torch.no_grad():
-            latents = vae.encode(target * 2 - 1).latent_dist.sample()
-            latents = latents * vae.config.scaling_factor
+            latents = vae.encode((target * 2 - 1).float()).latent_dist.sample()
+            latents = (latents * vae.config.scaling_factor).to(weight_dtype)
 
         # Sample noise
         noise = torch.randn_like(latents)
@@ -752,21 +832,41 @@ def train(
             # x0_pred → noise_pred → ControlNet. This is critical for the
             # identity and perceptual losses to provide gradient signal.
             pred_image = vae.decode(x0_pred / vae.config.scaling_factor).sample
-            pred_image_01 = ((pred_image + 1) / 2).clamp(0, 1)
-            target_01 = target  # already in [0, 1]
+            pred_image_01 = ((pred_image + 1) / 2).clamp(0, 1).float()
+            target_01 = target.float()  # cast to FP32 for ArcFace/LPIPS
 
-            # Identity loss (differentiable PyTorch ArcFace)
-            id_loss = combined_loss.identity_loss(pred_image_01, target_01)
+            # Compute per-sample to handle mixed-procedure batches correctly
+            # (orthognathic returns 0, different procedures use different crops)
+            if "procedure" in batch:
+                procs = batch["procedure"]
+                id_losses = []
+                for si in range(pred_image_01.shape[0]):
+                    id_losses.append(
+                        combined_loss.identity_loss(
+                            pred_image_01[si : si + 1], target_01[si : si + 1], procs[si]
+                        )
+                    )
+                id_loss = torch.stack(id_losses).mean()
+            else:
+                id_loss = combined_loss.identity_loss(pred_image_01, target_01, "rhinoplasty")
             # Perceptual loss (LPIPS on non-surgical region)
             mask_b = batch["mask"].to(device, dtype=weight_dtype)
             if mask_b.dim() == 3:
                 mask_b = mask_b.unsqueeze(1)
             perc_loss = combined_loss.perceptual_loss(pred_image_01, target_01, mask_b)
 
+            # Apply curriculum weighting to auxiliary losses too, so
+            # down-weighted procedures don't get disproportionate
+            # identity/perceptual signal relative to diffusion loss
+            if _curriculum_weights is not None and _curriculum_use_loss_weighting:
+                curriculum_scale = w.mean()  # mean curriculum weight for this batch
+            else:
+                curriculum_scale = 1.0
+
             loss = (
                 diffusion_loss
-                + loss_weights.identity * id_loss
-                + loss_weights.perceptual * perc_loss
+                + loss_weights.identity * id_loss * curriculum_scale
+                + loss_weights.perceptual * perc_loss * curriculum_scale
             )
 
             # Log Phase B loss components (main process only)
@@ -777,6 +877,11 @@ def train(
                             "loss/diffusion": diffusion_loss.item(),
                             "loss/identity": id_loss.item(),
                             "loss/perceptual": perc_loss.item(),
+                            "loss/curriculum_scale": (
+                                float(curriculum_scale)
+                                if isinstance(curriculum_scale, (int, float))
+                                else curriculum_scale.item()
+                            ),
                         },
                         step=global_step,
                     )

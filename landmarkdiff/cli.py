@@ -176,7 +176,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     p_infer.add_argument("--intensity", type=float, default=65.0)
     p_infer.add_argument("--output", default="output.png")
-    p_infer.add_argument("--mode", default="tps", choices=["controlnet", "img2img", "tps"])
+    p_infer.add_argument(
+        "--mode",
+        default="tps",
+        choices=["controlnet", "controlnet_ip", "controlnet_fast", "img2img", "tps"],
+    )
     p_infer.add_argument("--checkpoint", default=None)
     p_infer.add_argument("--displacement-model", default=None)
     p_infer.add_argument("--seed", type=int, default=42)
@@ -195,7 +199,11 @@ def main(argv: list[str] | None = None) -> None:
         default="best_of_n",
         choices=["pixel_average", "weighted_average", "best_of_n", "median"],
     )
-    p_ensemble.add_argument("--mode", default="tps", choices=["controlnet", "img2img", "tps"])
+    p_ensemble.add_argument(
+        "--mode",
+        default="tps",
+        choices=["controlnet", "controlnet_ip", "controlnet_fast", "img2img", "tps"],
+    )
     p_ensemble.add_argument("--checkpoint", default=None)
     p_ensemble.add_argument("--displacement-model", default=None)
     p_ensemble.add_argument("--seed", type=int, default=42)
