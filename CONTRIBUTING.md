@@ -6,10 +6,13 @@ If you have questions that this guide doesn't answer, feel free to open a [Discu
 
 ## Table of Contents
 
+- [Quick Start](#quick-start)
 - [Development Setup](#development-setup)
 - [Code Style](#code-style)
 - [Testing](#testing)
 - [Submitting Changes](#submitting-changes)
+- [PR Checklist](#pr-checklist)
+- [Supported Procedures](#supported-procedures)
 - [Adding a New Procedure Preset](#adding-a-new-procedure-preset)
 - [Adding Clinical Flags](#adding-clinical-flags)
 - [3D Reconstruction Contributions](#3d-reconstruction-contributions)
@@ -17,6 +20,33 @@ If you have questions that this guide doesn't answer, feel free to open a [Discu
 - [Issue Labels](#issue-labels)
 - [Recognition](#recognition)
 - [Community Guidelines](#community-guidelines)
+
+---
+
+## Quick Start
+
+First-time setup in five commands:
+
+```bash
+# 1. Fork the repo on GitHub, then clone your fork
+git clone https://github.com/<your-username>/LandmarkDiff-public.git
+cd LandmarkDiff-public
+
+# 2. Create a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # on Windows: .venv\Scripts\activate
+
+# 3. Install with all dev dependencies
+pip install -e ".[train,eval,app,dev]"
+
+# 4. Run the tests
+pytest tests/ -x
+
+# 5. Run lints
+ruff check . && ruff format --check .
+```
+
+If all tests pass and linting is clean, you're ready to contribute.
 
 ---
 
@@ -29,23 +59,24 @@ If you have questions that this guide doesn't answer, feel free to open a [Discu
 - A virtual environment tool (venv, conda, etc.)
 - GPU with 6GB+ VRAM is helpful but not required (TPS mode runs on CPU)
 
-### Clone and install
+### Install extras
+
+The `[dev]` extra pulls in pytest, ruff, mypy, and everything else you need for local development. The other extras are optional depending on what you're working on:
+
+| Extra     | What it includes                         |
+|-----------|------------------------------------------|
+| `dev`     | pytest, ruff, mypy, pre-commit, coverage |
+| `train`   | PyTorch, diffusers, accelerate           |
+| `eval`    | FID, LPIPS, ArcFace metrics              |
+| `app`     | Gradio, CodeFormer, Real-ESRGAN          |
+
+Install any combination:
 
 ```bash
-git clone https://github.com/dreamlessx/LandmarkDiff-public.git
-cd LandmarkDiff-public
-
-python -m venv .venv
-source .venv/bin/activate  # on Windows: .venv\Scripts\activate
-
-# Install with all dev dependencies
+# Dev only
 pip install -e ".[dev]"
-```
 
-The `[dev]` extra pulls in pytest, ruff, mypy, and everything else you need for local development. If you also want training, eval, or Gradio dependencies:
-
-```bash
-# Everything at once
+# Everything
 pip install -e ".[train,eval,app,dev]"
 ```
 
@@ -82,13 +113,13 @@ We use [ruff](https://github.com/astral-sh/ruff) for both linting and formatting
 
 ```bash
 # Check for lint issues
-ruff check landmarkdiff/ scripts/ tests/
+ruff check .
 
 # Auto-format
-ruff format landmarkdiff/ scripts/ tests/
+ruff format .
 
 # Auto-fix lint issues where possible
-ruff check --fix landmarkdiff/ scripts/ tests/
+ruff check --fix .
 ```
 
 Or use the Makefile shortcuts:
@@ -103,7 +134,7 @@ make format    # auto-fix + format
 We use [mypy](https://mypy-lang.org/) for static type analysis:
 
 ```bash
-mypy landmarkdiff/ --ignore-missing-imports
+mypy landmarkdiff/
 # or
 make type-check
 ```
@@ -128,6 +159,9 @@ Tests live in the `tests/` directory and use [pytest](https://docs.pytest.org/).
 ```bash
 # Full suite
 pytest tests/ -v
+
+# Stop on first failure
+pytest tests/ -x
 
 # With coverage
 pytest tests/ -v --cov=landmarkdiff --cov-report=term-missing
@@ -201,7 +235,9 @@ All three must pass before a PR can be merged.
 3. **Make your changes.** Write code, add tests, update docs as needed.
 4. **Run the checks locally:**
    ```bash
-   make check  # or: ruff check ... && mypy ... && pytest ...
+   pytest tests/ -x
+   ruff check . && ruff format --check .
+   mypy landmarkdiff/
    ```
 5. **Commit** with a clear message. We don't enforce a rigid format, but try to be descriptive:
    ```
@@ -228,52 +264,104 @@ All three must pass before a PR can be merged.
 
 ---
 
+## PR Checklist
+
+Before opening your pull request, verify the following locally:
+
+- [ ] **Tests pass:** `pytest tests/ -x`
+- [ ] **Linting passes:** `ruff check . && ruff format --check .`
+- [ ] **Type checking passes:** `mypy landmarkdiff/`
+- [ ] **New code has type hints** on all public function signatures
+- [ ] **Docstrings follow Google style** (see existing code for examples)
+- [ ] **No new warnings** from mypy or ruff
+- [ ] **Docs updated** if you changed public API or added a feature
+
+If your PR adds a new procedure preset, also verify:
+
+- [ ] Procedure appears in `PROCEDURE_LANDMARKS`, `PROCEDURE_RADIUS`, and `_get_procedure_handles()`
+- [ ] Procedure is registered in the CLI choices in `landmarkdiff/__main__.py`
+- [ ] Tests cover intensity levels 0, 50, and 100
+- [ ] README "Supported Procedures" section is updated
+
+---
+
+## Supported Procedures
+
+LandmarkDiff currently supports six surgical procedures. Each one is defined as a set of [MediaPipe 478-point face mesh](https://github.com/google/mediapipe/blob/master/mediapipe/modules/face_geometry/data/canonical_face_model_uv_visualization.png) landmark indices, a Gaussian RBF influence radius, and per-landmark displacement vectors.
+
+| Procedure        | Description                                | Landmark count | Radius (px at 512x512) |
+|------------------|--------------------------------------------|----------------|------------------------|
+| `rhinoplasty`    | Nose reshaping (bridge, tip, alar base)    | 24             | 30.0                   |
+| `blepharoplasty` | Eyelid surgery (upper and lower)           | 28             | 15.0                   |
+| `rhytidectomy`   | Facelift (cheeks, jawline, temples)        | 32             | 40.0                   |
+| `orthognathic`   | Jaw surgery (maxilla, mandible, chin)      | 46             | 35.0                   |
+| `brow_lift`      | Forehead and brow elevation                | 18             | 25.0                   |
+| `mentoplasty`    | Chin augmentation / reduction              | 8              | 25.0                   |
+
+Both `brow_lift` and `mentoplasty` were contributed by community members -- see PRs [#35](https://github.com/dreamlessx/LandmarkDiff-public/pull/35) and [#36](https://github.com/dreamlessx/LandmarkDiff-public/pull/36).
+
+---
+
 ## Adding a New Procedure Preset
 
-New procedure presets are one of the most impactful contributions. Two community contributors have already added brow lift and mentoplasty this way. Here is the step-by-step process.
+New procedure presets are one of the most impactful contributions. Here is the step-by-step process.
 
-### 1. Research the procedure
+### Step 1: Research the procedure
 
 Understand which anatomical structures are affected and in what directions. Look at surgical textbooks, published anthropometric data, or before/after imagery to understand the typical tissue displacement patterns.
 
-### 2. Identify landmarks
+### Step 2: Identify landmarks
 
-Find the relevant landmark indices in the [MediaPipe 478-point face mesh](https://github.com/google/mediapipe/blob/master/mediapipe/modules/face_geometry/data/canonical_face_model_uv_visualization.png). You can also use the landmark visualization example to see all 478 points on a test face:
+Find the relevant landmark indices in the [MediaPipe 478-point face mesh](https://github.com/google/mediapipe/blob/master/mediapipe/modules/face_geometry/data/canonical_face_model_uv_visualization.png). You can use the landmark visualization example to see all 478 points on a test face:
 
 ```bash
 python examples/landmark_visualization.py /path/to/face.jpg
 ```
 
-### 3. Add the preset to `landmarkdiff/manipulation.py`
+### Step 3: Add the preset to `landmarkdiff/manipulation.py`
 
-You need to touch three data structures:
+You need to touch three data structures in `landmarkdiff/manipulation.py`:
 
-**a) `PROCEDURE_LANDMARKS`** -- add your landmark index list:
+**a) Add your landmark indices to `PROCEDURE_LANDMARKS`:**
 
 ```python
 PROCEDURE_LANDMARKS: dict[str, list[int]] = {
-    # ... existing procedures ...
+    "rhinoplasty": [...],
+    "blepharoplasty": [...],
+    "rhytidectomy": [...],
+    "orthognathic": [...],
+    "brow_lift": [...],
+    "mentoplasty": [...],
+    # Add your new procedure here
     "otoplasty": [
-        # ear landmarks
-        234, 93, 132, ...
+        234, 93, 132, ...  # ear landmarks
     ],
 }
 ```
 
-**b) `PROCEDURE_RADIUS`** -- set the Gaussian RBF influence radius (pixels at 512x512). Smaller radius (15-20px) for fine structures, larger (35-40px) for broad tissue mobilization:
+**b) Set the Gaussian RBF influence radius in `PROCEDURE_RADIUS`:**
+
+Smaller radius (15-20px) for fine structures (e.g., eyelids), larger (35-40px) for broad tissue mobilization (e.g., facelift). Values are in pixels at 512x512 resolution.
 
 ```python
 PROCEDURE_RADIUS: dict[str, float] = {
-    # ... existing ...
+    "rhinoplasty": 30.0,
+    "blepharoplasty": 15.0,
+    "rhytidectomy": 40.0,
+    "orthognathic": 35.0,
+    "brow_lift": 25.0,
+    "mentoplasty": 25.0,
     "otoplasty": 20.0,
 }
 ```
 
-**c) `_get_procedure_handles()`** -- define the displacement vectors for each landmark. Each displacement is a `(dx, dy)` pair in pixels (at 512x512 resolution), scaled by the intensity parameter. Positive x is rightward, positive y is downward:
+**c) Define displacement vectors in `_get_procedure_handles()`:**
+
+Each displacement is a `(dx, dy)` pair in pixels (at 512x512 resolution), scaled by the intensity parameter. Positive x is rightward, positive y is downward.
 
 ```python
 def _get_procedure_handles(procedure, indices, scale, radius):
-    # ... existing cases ...
+    # ... existing procedure cases ...
     elif procedure == "otoplasty":
         for idx in indices:
             dx, dy = _otoplasty_displacement(idx)
@@ -284,11 +372,28 @@ def _get_procedure_handles(procedure, indices, scale, radius):
             ))
 ```
 
-### 4. Register in the CLI
+### Step 4: Register in the CLI
 
-Add your procedure name to the choices list in `landmarkdiff/__main__.py` so the CLI recognizes it.
+Add your procedure name to the `choices` list in `landmarkdiff/__main__.py` so the CLI recognizes it:
 
-### 5. Add tests
+```python
+infer.add_argument(
+    "--procedure",
+    type=str,
+    default="rhinoplasty",
+    choices=[
+        "rhinoplasty",
+        "blepharoplasty",
+        "rhytidectomy",
+        "orthognathic",
+        "brow_lift",
+        "mentoplasty",
+        "otoplasty",  # <-- add here
+    ],
+)
+```
+
+### Step 5: Add tests
 
 Create or extend a test file in `tests/`. At minimum, test:
 
@@ -305,12 +410,12 @@ def test_otoplasty_preset():
     assert not np.allclose(result.landmarks, face.landmarks)
 ```
 
-### 6. Update documentation
+### Step 6: Update documentation
 
 - Add a section to `README.md` under "Supported Procedures" following the existing format (description, landmark indices, influence radius).
 - If you used published references for the displacement vectors, cite them.
 
-### 7. Open a PR
+### Step 7: Open a PR
 
 Use the "New Procedure Preset" type in the PR template checklist. Mention the anatomical rationale in your PR description.
 
