@@ -1,8 +1,17 @@
-"""Run ControlNet inference and produce before/after results."""
+"""Run ControlNet inference and produce before/after results.
+
+Downloads model weights on first run (~4GB), then generates surgical outcome
+predictions for all 6 procedures on sample images.
+
+Usage:
+    python scripts/run_inference.py
+    python scripts/run_inference.py --image data/ffhq_samples/000002.png --procedure rhinoplasty
+"""
 
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import time
 from pathlib import Path
@@ -12,8 +21,11 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from landmarkdiff.inference import LandmarkDiffPipeline
-from landmarkdiff.masking import mask_to_3channel
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
+
+from landmarkdiff.inference import LandmarkDiffPipeline  # noqa: E402
+from landmarkdiff.masking import mask_to_3channel  # noqa: E402
 
 
 def run_single(
@@ -26,7 +38,7 @@ def run_single(
 ) -> bool:
     image = cv2.imread(image_path)
     if image is None:
-        print(f"  ERROR: Could not load {image_path}")
+        logger.error("Could not load %s", image_path)
         return False
 
     image_512 = cv2.resize(image, (512, 512))
@@ -44,10 +56,7 @@ def run_single(
             seed=seed,
         )
     except Exception as e:
-        print(f"  ERROR: {e}")
-        import traceback
-
-        traceback.print_exc()
+        logger.error("Generation failed: %s", e, exc_info=True)
         return False
     elapsed = time.time() - t0
 
@@ -69,7 +78,7 @@ def run_single(
     composite = np.hstack([result["input"], result["conditioning"], mask_vis, result["output"]])
     cv2.imwrite(str(out / "composite.png"), composite)
 
-    print(f"  {procedure} ({intensity:.0f}%): {elapsed:.1f}s -> {out}/")
+    logger.info("  %s (%.0f%%): %.1fs -> %s/", procedure, intensity, elapsed, out)
     return True
 
 
@@ -80,10 +89,10 @@ def run_all(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    print("Loading SD1.5 img2img pipeline...")
+    logger.info("Loading SD1.5 img2img pipeline...")
     pipe = LandmarkDiffPipeline(mode="img2img")
     pipe.load()
-    print()
+    logger.info("")
 
     procedures = [
         "rhinoplasty",
@@ -102,14 +111,14 @@ def run_all(
 
     for img_path in images:
         name = Path(img_path).stem
-        print(f"Processing {name}...")
+        logger.info("Processing %s...", name)
         for proc in procedures:
             run_single(pipe, img_path, proc, intensity=60.0, output_dir=out)
-        print()
+        logger.info("")
 
     # Build a master comparison grid
     _build_master_grid(out, images, procedures)
-    print(f"All inference results in {out}/")
+    logger.info("All inference results in %s/", out)
 
 
 def _build_master_grid(out: Path, images: list[str], procedures: list[str]) -> None:
@@ -150,7 +159,9 @@ def _build_master_grid(out: Path, images: list[str], procedures: list[str]) -> N
             padded.append(r)
         grid = np.vstack(padded)
         cv2.imwrite(str(out / "master_grid.png"), grid)
-        print(f"Master grid: {out / 'master_grid.png'} ({grid.shape[1]}x{grid.shape[0]})")
+        logger.info(
+            "Master grid: %s (%dx%d)", out / "master_grid.png", grid.shape[1], grid.shape[0]
+        )
 
 
 if __name__ == "__main__":

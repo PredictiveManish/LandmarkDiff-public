@@ -105,15 +105,18 @@ class SurgicalPairDataset(Dataset):
         try:
             with open(meta_path) as f:
                 data = json.load(f)
-            return data.get("pairs", {})
-        except Exception:
+            result: dict = data.get("pairs", {})
+            return result
+        except (json.JSONDecodeError, OSError):
+            logger.debug("Failed to load metadata from %s", meta_path)
             return {}
 
     def get_procedure(self, idx: int) -> str:
         """Get the surgical procedure type for a sample."""
         prefix = self._prefix(idx)
         info = self.metadata.get(prefix, {})
-        return info.get("procedure", "unknown")
+        proc: str = info.get("procedure", "unknown")
+        return proc
 
     def get_procedures(self) -> list[str]:
         """Get procedure types for all samples."""
@@ -205,8 +208,8 @@ class EvalPairDataset(Dataset):
             try:
                 with open(meta_path) as f:
                     self._meta = json.load(f).get("pairs", {})
-            except Exception:
-                pass
+            except (json.JSONDecodeError, OSError):
+                logger.debug("Failed to load metadata from %s", meta_path)
 
     def __len__(self) -> int:
         return len(self.pairs)
@@ -372,6 +375,8 @@ class CombinedDataset(Dataset):
         return self._cumulative_sizes[-1] if self._cumulative_sizes else 0
 
     def __getitem__(self, idx: int) -> dict:
+        if idx < 0 or idx >= len(self):
+            raise IndexError(f"CombinedDataset index {idx} out of range [0, {len(self)})")
         dataset_idx = 0
         for i, size in enumerate(self._cumulative_sizes):
             if idx < size:
@@ -382,6 +387,8 @@ class CombinedDataset(Dataset):
         return self.datasets[dataset_idx][idx]
 
     def get_procedure(self, idx: int) -> str:
+        if idx < 0 or idx >= len(self):
+            raise IndexError(f"CombinedDataset index {idx} out of range [0, {len(self)})")
         dataset_idx = 0
         for i, size in enumerate(self._cumulative_sizes):
             if idx < size:
