@@ -201,9 +201,13 @@ Six-step refinement:
 
 Sample outputs are in the [demos/](demos/) directory.
 
-**Pipeline visualizations** (`demo_pipeline_0.png`, `demo_pipeline_1.png`):
+**Pipeline visualization** (`pipeline_abstract.png`):
 
-Step-by-step view of the full pipeline: Input -> Original Mesh -> Manipulated Mesh -> Surgical Mask -> Result.
+Schematic overview of the five-stage pipeline: Input, 478-point mesh extraction, RBF deformation, ControlNet + SD1.5 synthesis, and predicted result.
+
+**Mesh deformation** (`mesh_deformation.png`):
+
+Side-by-side comparison of original and deformed face meshes, showing procedure-specific Gaussian RBF displacement vectors.
 
 ControlNet-generated photorealistic samples will be added after model training completes.
 
