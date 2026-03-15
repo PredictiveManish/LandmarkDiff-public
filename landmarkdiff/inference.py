@@ -671,7 +671,7 @@ def run_inference(
 
     image = cv2.imread(image_path)
     if image is None:
-        print(f"ERROR: Could not load {image_path}")
+        logger.error("Could not load %s", image_path)
         sys.exit(1)
 
     pipe = LandmarkDiffPipeline(
@@ -682,7 +682,7 @@ def run_inference(
     )
     pipe.load()
 
-    print(f"\nGenerating {procedure} prediction (intensity={intensity}, mode={mode})...")
+    logger.info("Generating %s prediction (intensity=%s, mode=%s)", procedure, intensity, mode)
     result = pipe.generate(image, procedure=procedure, intensity=intensity, seed=seed)
 
     cv2.imwrite(str(out / "input.png"), result["input"])
@@ -697,9 +697,9 @@ def run_inference(
 
     view = result.get("view_info", {})
     if view.get("warning"):
-        print(f"WARNING: {view['warning']}")
-    print(f"Face view: {view.get('view', 'unknown')} (yaw={view.get('yaw', 0)})")
-    print(f"Results saved to {out}/")
+        logger.warning("%s", view["warning"])
+    logger.info("Face view: %s (yaw=%s)", view.get("view", "unknown"), view.get("yaw", 0))
+    logger.info("Results saved to %s/", out)
 
 
 if __name__ == "__main__":
