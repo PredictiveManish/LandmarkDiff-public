@@ -32,6 +32,7 @@ __all__ = [
     "metrics_agg",
     "metrics_viz",
     "model_registry",
+    "morphometry",
     "postprocess",
     "safety",
     "synthetic",
