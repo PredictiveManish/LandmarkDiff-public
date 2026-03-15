@@ -36,6 +36,7 @@ jobs:
   test-pypi:
     needs: build
     runs-on: ubuntu-latest
+    continue-on-error: true
     environment:
       name: test-pypi
       url: https://test.pypi.org/p/landmarkdiff
@@ -52,7 +53,8 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
 
   pypi:
-    needs: test-pypi
+    needs: build
+    if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: pypi
