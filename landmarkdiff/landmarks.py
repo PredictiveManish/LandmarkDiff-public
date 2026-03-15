@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
 import mediapipe as mp
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 # Region color map for visualization (BGR)
 REGION_COLORS: dict[str, tuple[int, int, int]] = {
@@ -201,11 +204,13 @@ def extract_landmarks(
     try:
         landmarks, confidence = _extract_tasks_api(rgb, min_detection_confidence)
     except Exception:
+        logger.debug("Tasks API unavailable, trying Solutions API", exc_info=True)
         try:
             landmarks, confidence = _extract_solutions_api(
                 rgb, min_detection_confidence, min_tracking_confidence
             )
         except Exception:
+            logger.debug("Both MediaPipe APIs failed", exc_info=True)
             return None
 
     if landmarks is None:
@@ -338,7 +343,7 @@ def render_landmark_image(
     """Render MediaPipe face mesh tessellation on black canvas.
 
     Draws the full 2556-edge tessellation mesh that CrucibleAI/ControlNetMediaPipeFace
-    was pre-trained on. This is critical — the ControlNet expects dense triangulated
+    was pre-trained on. This is critical -- the ControlNet expects dense triangulated
     wireframes, not sparse dots.
 
     Falls back to colored dots if tessellation connections aren't available.
@@ -380,7 +385,7 @@ def render_landmark_image(
             p2 = tuple(pts[conn.end])
             cv2.line(canvas, p1, p2, (255, 255, 255), 1, cv2.LINE_AA)
 
-    except ImportError:
+    except (ImportError, AttributeError):
         # Fallback: draw colored dots if tessellation not available
         idx_to_color: dict[int, tuple[int, int, int]] = {}
         for region, indices in LANDMARK_REGIONS.items():

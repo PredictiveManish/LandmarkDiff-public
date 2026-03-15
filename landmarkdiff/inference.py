@@ -4,20 +4,18 @@ Four modes:
 1. ControlNet: CrucibleAI/ControlNetMediaPipeFace + SD1.5 (requires HF auth + GPU)
 2. ControlNet + IP-Adapter: ControlNet with identity preservation via face embeddings
 3. Img2Img: SD1.5 img2img with mask compositing (runs on MPS, no auth needed)
-4. TPS-only: Pure geometric warp — no diffusion model, instant results
+4. TPS-only: Pure geometric warp -- no diffusion model, instant results
 
 Supports MPS (Apple Silicon), CUDA, and CPU backends.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from landmarkdiff.clinical import ClinicalFlags
 
 import cv2
 import numpy as np
@@ -28,6 +26,11 @@ from landmarkdiff.landmarks import FaceLandmarks, extract_landmarks, render_land
 from landmarkdiff.manipulation import apply_procedure_preset
 from landmarkdiff.masking import generate_surgical_mask, mask_to_3channel
 from landmarkdiff.synthetic.tps_warp import warp_image_tps
+
+if TYPE_CHECKING:
+    from landmarkdiff.clinical import ClinicalFlags
+
+logger = logging.getLogger(__name__)
 
 
 def get_device() -> torch.device:
@@ -92,6 +95,21 @@ NEGATIVE_PROMPT = (
     "plastic skin, waxy, smooth skin, airbrushed, oversaturated"
 )
 
+# Skin tone matching: minimum mask alpha to include in LAB stats transfer
+_SKIN_TONE_MASK_THRESHOLD = 0.3
+# Epsilon to avoid division by zero in std normalization
+_STD_EPSILON = 1e-6
+# Default SD1.5 resolution (all pipelines resize to this)
+_SD15_RESOLUTION = 512
+# Intensity mapping: UI scale (0-100) to displacement model scale (0-2)
+_INTENSITY_UI_TO_MODEL = 50.0
+# Face view classification thresholds (degrees)
+_YAW_FRONTAL_MAX = 15
+_YAW_THREE_QUARTER_MAX = 45
+_YAW_WARNING_THRESHOLD = 30
+# Max pitch scale factor (maps pitch ratio to degrees)
+_PITCH_SCALE = 45
+
 
 def mask_composite(
     warped: np.ndarray,
@@ -118,7 +136,7 @@ def mask_composite(
 
             return laplacian_pyramid_blend(corrected, original, mask_f)
         except Exception:
-            pass
+            logger.debug("Laplacian blend failed, using alpha blend", exc_info=True)
 
     # Fallback: simple alpha blend
     mask_3ch = mask_to_3channel(mask_f)
@@ -135,7 +153,7 @@ def _match_skin_tone(source: np.ndarray, target: np.ndarray, mask: np.ndarray) -
     Works in LAB space: transfers L (luminance) and AB (color) statistics
     from the original to the warped image so skin tone is preserved exactly.
     """
-    mask_bool = mask > 0.3
+    mask_bool = mask > _SKIN_TONE_MASK_THRESHOLD
     if not np.any(mask_bool):
         return source
 
@@ -147,8 +165,8 @@ def _match_skin_tone(source: np.ndarray, target: np.ndarray, mask: np.ndarray) -
         src_vals = src_lab[:, :, ch][mask_bool]
         tgt_vals = tgt_lab[:, :, ch][mask_bool]
 
-        src_mean, src_std = np.mean(src_vals), np.std(src_vals) + 1e-6
-        tgt_mean, tgt_std = np.mean(tgt_vals), np.std(tgt_vals) + 1e-6
+        src_mean, src_std = np.mean(src_vals), np.std(src_vals) + _STD_EPSILON
+        tgt_mean, tgt_std = np.mean(tgt_vals), np.std(tgt_vals) + _STD_EPSILON
 
         # Normalize source to match target's distribution
         src_lab[:, :, ch] = np.where(
@@ -206,9 +224,9 @@ class LandmarkDiffPipeline:
                 from landmarkdiff.displacement_model import DisplacementModel
 
                 self._displacement_model = DisplacementModel.load(displacement_model_path)
-                print(f"Displacement model loaded: {self._displacement_model.procedures}")
+                logger.info("Displacement model loaded: %s", self._displacement_model.procedures)
             except Exception as e:
-                print(f"WARNING: Failed to load displacement model: {e}")
+                logger.warning("Failed to load displacement model: %s", e)
 
         if self.device.type == "mps":
             self.dtype = torch.float32
@@ -229,7 +247,7 @@ class LandmarkDiffPipeline:
 
     def load(self) -> None:
         if self.mode == "tps":
-            print("TPS mode — no model to load")
+            logger.info("TPS mode -- no model to load")
             return
         if self.mode in ("controlnet", "controlnet_ip", "controlnet_fast"):
             self._load_controlnet()
@@ -256,20 +274,20 @@ class LandmarkDiffPipeline:
             # Support both direct path and training checkpoint structure
             if (ckpt_path / "controlnet_ema").exists():
                 ckpt_path = ckpt_path / "controlnet_ema"
-            print(f"Loading fine-tuned ControlNet from {ckpt_path}...")
+            logger.info("Loading fine-tuned ControlNet from %s", ckpt_path)
             controlnet = ControlNetModel.from_pretrained(
                 str(ckpt_path),
                 torch_dtype=self.dtype,
             )
         else:
-            print(f"Loading ControlNet from {self.controlnet_id}...")
+            logger.info("Loading ControlNet from %s", self.controlnet_id)
             controlnet = ControlNetModel.from_pretrained(
                 self.controlnet_id,
                 subfolder="diffusion_sd15",
                 torch_dtype=self.dtype,
                 **_kw,
             )
-        print(f"Loading base model from {self.base_model_id}...")
+        logger.info("Loading base model from %s", self.base_model_id)
         self._pipe = StableDiffusionControlNetPipeline.from_pretrained(
             self.base_model_id,
             controlnet=controlnet,
@@ -278,13 +296,13 @@ class LandmarkDiffPipeline:
             requires_safety_checker=False,
             **_kw,
         )
-        # DPM++ 2M Karras — produces more photorealistic output than UniPC
+        # DPM++ 2M Karras -- produces more photorealistic output than UniPC
         self._pipe.scheduler = DPMSolverMultistepScheduler.from_config(
             self._pipe.scheduler.config,
             algorithm_type="dpmsolver++",
             use_karras_sigmas=True,
         )
-        # FP32 VAE decode — prevents color banding artifacts on skin tones
+        # FP32 VAE decode -- prevents color banding artifacts on skin tones
         if hasattr(self._pipe, "vae") and self._pipe.vae is not None:
             self._pipe.vae.config.force_upcast = True
         self._apply_device_optimizations()
@@ -301,16 +319,16 @@ class LandmarkDiffPipeline:
         try:
             from diffusers import LCMScheduler
 
-            print(f"Loading LCM-LoRA from {self.LCM_LORA_REPO}...")
+            logger.info("Loading LCM-LoRA from %s", self.LCM_LORA_REPO)
             _local_only = os.environ.get("HF_HUB_OFFLINE", "0") == "1"
             _kw: dict = {"local_files_only": True} if _local_only else {}
             self._pipe.load_lora_weights(self.LCM_LORA_REPO, **_kw)
             self._pipe.scheduler = LCMScheduler.from_config(self._pipe.scheduler.config)
             self._lcm_loaded = True
-            print("LCM-LoRA loaded — 4-step inference enabled")
+            logger.info("LCM-LoRA loaded -- 4-step inference enabled")
         except Exception as e:
-            print(f"WARNING: LCM-LoRA load failed: {e}")
-            print("Falling back to standard scheduler (30 steps)")
+            logger.warning("LCM-LoRA load failed: %s", e)
+            logger.warning("Falling back to standard scheduler (30 steps)")
             self._lcm_loaded = False
 
     def _load_ip_adapter(self) -> None:
@@ -322,7 +340,7 @@ class LandmarkDiffPipeline:
         if self._pipe is None:
             raise RuntimeError("Base pipeline must be loaded before IP-Adapter")
         try:
-            print(f"Loading IP-Adapter ({self.IP_ADAPTER_WEIGHT_NAME})...")
+            logger.info("Loading IP-Adapter (%s)", self.IP_ADAPTER_WEIGHT_NAME)
             self._pipe.load_ip_adapter(
                 self.IP_ADAPTER_REPO,
                 subfolder=self.IP_ADAPTER_SUBFOLDER,
@@ -330,10 +348,10 @@ class LandmarkDiffPipeline:
             )
             self._pipe.set_ip_adapter_scale(self.ip_adapter_scale)
             self._ip_adapter_loaded = True
-            print(f"IP-Adapter loaded (scale={self.ip_adapter_scale})")
+            logger.info("IP-Adapter loaded (scale=%s)", self.ip_adapter_scale)
         except Exception as e:
-            print(f"WARNING: IP-Adapter load failed: {e}")
-            print("Falling back to ControlNet-only mode")
+            logger.warning("IP-Adapter load failed: %s", e)
+            logger.warning("Falling back to ControlNet-only mode")
             self._ip_adapter_loaded = False
 
     def _load_img2img(self) -> None:
@@ -345,7 +363,7 @@ class LandmarkDiffPipeline:
         _local_only = os.environ.get("HF_HUB_OFFLINE", "0") == "1"
         _kw: dict = {"local_files_only": True} if _local_only else {}
 
-        print(f"Loading SD1.5 img2img from {self.base_model_id}...")
+        logger.info("Loading SD1.5 img2img from %s", self.base_model_id)
         self._pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
             self.base_model_id,
             torch_dtype=self.dtype,
@@ -367,7 +385,7 @@ class LandmarkDiffPipeline:
                 self._pipe = self._pipe.to(self.device)
         else:
             self._pipe.enable_sequential_cpu_offload()
-        print(f"Pipeline loaded on {self.device} ({self.dtype})")
+        logger.info("Pipeline loaded on %s (%s)", self.device, self.dtype)
 
     @property
     def is_loaded(self) -> bool:
@@ -391,7 +409,8 @@ class LandmarkDiffPipeline:
             raise RuntimeError("Pipeline not loaded. Call .load() first.")
 
         flags = clinical_flags or self.clinical_flags
-        image_512 = cv2.resize(image, (512, 512))
+        res = _SD15_RESOLUTION
+        image_512 = cv2.resize(image, (res, res))
 
         face = extract_landmarks(image_512)
         if face is None:
@@ -406,7 +425,7 @@ class LandmarkDiffPipeline:
             try:
                 rng = np.random.default_rng(seed) if seed is not None else np.random.default_rng()
                 # Map UI intensity (0-100) to displacement model intensity (0-2)
-                dm_intensity = intensity / 50.0  # 50 -> 1.0x mean displacement
+                dm_intensity = intensity / _INTENSITY_UI_TO_MODEL  # 50 -> 1.0x mean displacement
                 displacement = self._displacement_model.get_displacement_field(
                     procedure,
                     intensity=dm_intensity,
@@ -422,23 +441,18 @@ class LandmarkDiffPipeline:
                 new_lm[:, 1] = np.clip(new_lm[:, 1], 0.01, 0.99)
                 manipulated = FaceLandmarks(
                     landmarks=new_lm,
-                    image_width=512,
-                    image_height=512,
+                    image_width=res,
+                    image_height=res,
                     confidence=face.confidence,
                 )
                 manipulation_mode = "displacement_model"
             except Exception as exc:
-                import warnings
-
-                warnings.warn(
-                    f"Displacement model failed, falling back to preset: {exc}",
-                    stacklevel=2,
-                )
+                logger.warning("Displacement model failed, falling back to preset: %s", exc)
                 manipulated = apply_procedure_preset(
                     face,
                     procedure,
                     intensity,
-                    image_size=512,
+                    image_size=res,
                     clinical_flags=flags,
                 )
         else:
@@ -446,15 +460,15 @@ class LandmarkDiffPipeline:
                 face,
                 procedure,
                 intensity,
-                image_size=512,
+                image_size=res,
                 clinical_flags=flags,
             )
-        landmark_img = render_landmark_image(manipulated, 512, 512)
+        landmark_img = render_landmark_image(manipulated, res, res)
         mask = generate_surgical_mask(
             face,
             procedure,
-            512,
-            512,
+            res,
+            res,
             clinical_flags=flags,
         )
 
@@ -464,7 +478,7 @@ class LandmarkDiffPipeline:
 
         prompt = PROCEDURE_PROMPTS.get(procedure, "a photo of a person's face")
 
-        # Step 1: TPS geometric warp (always computed — the geometric baseline)
+        # Step 1: TPS geometric warp (always computed -- the geometric baseline)
         tps_warped = warp_image_tps(image_512, face.pixel_coords, manipulated.pixel_coords)
 
         if self.mode == "tps":
@@ -595,11 +609,12 @@ def estimate_face_view(face: FaceLandmarks) -> dict:
     Returns dict with yaw, pitch (degrees), and view classification.
     """
     coords = face.pixel_coords
-    nose_tip = coords[1]
-    left_ear = coords[234]
-    right_ear = coords[454]
-    forehead = coords[10]
-    chin = coords[152]
+    # MediaPipe landmark indices for key anatomical points
+    nose_tip = coords[1]  # nose tip
+    left_ear = coords[234]  # left tragion (ear)
+    right_ear = coords[454]  # right tragion (ear)
+    forehead = coords[10]  # forehead center
+    chin = coords[152]  # chin center
 
     # Yaw: ratio of nose-to-ear distances (symmetric = 0 degrees)
     left_dist = np.linalg.norm(nose_tip - left_ear)
@@ -618,13 +633,13 @@ def estimate_face_view(face: FaceLandmarks) -> dict:
         pitch = 0.0
     else:
         pitch_ratio = (lower - upper) / (upper + lower)
-        pitch = float(pitch_ratio * 45)
+        pitch = float(pitch_ratio * _PITCH_SCALE)
 
     # Classify view
     abs_yaw = abs(yaw)
-    if abs_yaw < 15:
+    if abs_yaw < _YAW_FRONTAL_MAX:
         view = "frontal"
-    elif abs_yaw < 45:
+    elif abs_yaw < _YAW_THREE_QUARTER_MAX:
         view = "three_quarter"
     else:
         view = "profile"
@@ -633,8 +648,10 @@ def estimate_face_view(face: FaceLandmarks) -> dict:
         "yaw": round(yaw, 1),
         "pitch": round(pitch, 1),
         "view": view,
-        "is_frontal": abs_yaw < 15,
-        "warning": "Side-view detected: results may be less accurate" if abs_yaw > 30 else None,
+        "is_frontal": abs_yaw < _YAW_FRONTAL_MAX,
+        "warning": "Side-view detected: results may be less accurate"
+        if abs_yaw > _YAW_WARNING_THRESHOLD
+        else None,
     }
 
 

@@ -1,6 +1,6 @@
 """Surgical mask generation with morphological dilation and Gaussian feathering.
 
-Procedural masks (not SAM2) — deterministic, no model dependency.
+Procedural masks (not SAM2) -- deterministic, no model dependency.
 Feathered boundaries prevent visible seams in ControlNet inpainting.
 Supports clinical edge cases (vitiligo preservation, keloid softening).
 """
@@ -16,6 +16,12 @@ from landmarkdiff.landmarks import FaceLandmarks
 
 if TYPE_CHECKING:
     from landmarkdiff.clinical import ClinicalFlags
+
+# Boundary noise parameters for seam prevention
+_BOUNDARY_KERNEL_SIZE = 5  # px, morphological kernel for boundary extraction
+_BOUNDARY_NOISE_MAX = 4  # max random noise offset in pixels
+_BOUNDARY_NOISE_SCALE = 64  # intensity multiplier for noise mask
+_GAUSSIAN_KERNEL_FACTOR = 6  # sigma multiplier for Gaussian kernel size
 
 # Procedure-specific mask parameters
 MASK_CONFIG: dict[str, dict] = {
@@ -224,9 +230,11 @@ def generate_surgical_mask(
 
     Args:
         face: Extracted facial landmarks.
-        procedure: Procedure name.
-        width: Mask width.
-        height: Mask height.
+        procedure: Procedure name (e.g. "rhinoplasty").
+        width: Mask width (defaults to face.image_width).
+        height: Mask height (defaults to face.image_height).
+        clinical_flags: Optional clinical edge-case flags (vitiligo, keloid).
+        image: Original BGR image, required when clinical_flags.vitiligo is set.
 
     Returns:
         Float32 mask array [0.0-1.0] with feathered boundaries.
@@ -260,17 +268,17 @@ def generate_surgical_mask(
     # Add slight boundary noise to prevent clean-edge seams
     # (Spec: Perlin noise 2-4px on boundary before feathering)
     boundary = cv2.subtract(
-        cv2.dilate(dilated, np.ones((5, 5), np.uint8)),
-        cv2.erode(dilated, np.ones((5, 5), np.uint8)),
+        cv2.dilate(dilated, np.ones((_BOUNDARY_KERNEL_SIZE, _BOUNDARY_KERNEL_SIZE), np.uint8)),
+        cv2.erode(dilated, np.ones((_BOUNDARY_KERNEL_SIZE, _BOUNDARY_KERNEL_SIZE), np.uint8)),
     )
-    noise = np.random.default_rng().integers(0, 4, size=(h, w), dtype=np.uint8)
-    noise_boundary = cv2.bitwise_and(boundary, noise.astype(np.uint8) * 64)
+    noise = np.random.default_rng().integers(0, _BOUNDARY_NOISE_MAX, size=(h, w), dtype=np.uint8)
+    noise_boundary = cv2.bitwise_and(boundary, noise.astype(np.uint8) * _BOUNDARY_NOISE_SCALE)
     dilated = cv2.add(dilated, noise_boundary)
     dilated = np.clip(dilated, 0, 255).astype(np.uint8)
 
     # Gaussian feathering
     sigma = config["feather_sigma"]
-    ksize = int(6 * sigma) | 1  # ensure odd
+    ksize = int(_GAUSSIAN_KERNEL_FACTOR * sigma) | 1  # ensure odd
     feathered = cv2.GaussianBlur(
         dilated.astype(np.float32) / 255.0,
         (ksize, ksize),
