@@ -131,8 +131,8 @@
     <circle cx="64" cy="94" r="1.3"/>
   </g>
 
-  <!-- RIGHT SIDE NODES - amber (deformed) with glow -->
-  <!-- This is the "Diff" -- the right side is displaced -->
+  <!-- RIGHT SIDE NODES: amber (deformed) with glow -->
+  <!-- The "Diff": right side is displaced -->
   <g fill="#f59e0b" filter="url(#glow)">
     <circle cx="82" cy="20" r="1.6"/>
     <circle cx="93" cy="36" r="1.6"/>
