@@ -42,7 +42,7 @@ LandmarkDiff extracts MediaPipe's 478-point face mesh from the input photo, appl
 
 > **Paper:** "LandmarkDiff: Anatomically-Conditioned Latent Diffusion for Photorealistic Facial Surgery Outcome Prediction," targeting MICCAI 2026.
 
-![LandmarkDiff pipeline](demos/demo_pipeline_0.png)
+![LandmarkDiff pipeline](demos/pipeline_abstract.png)
 
 ### Try the Live Demo
 
@@ -329,13 +329,15 @@ Six-step refinement:
 
 ### Pipeline Visualization
 
-Each prediction follows five stages: input photo, original face mesh, manipulated mesh with procedure-specific deformations, surgical mask defining the affected region, and the final TPS-warped result.
+![LandmarkDiff pipeline stages](demos/pipeline_abstract.png)
 
-![Pipeline demo -- rhinoplasty on diverse faces](demos/demo_pipeline_0.png)
+The pipeline takes a single photo through five stages: face mesh extraction (478 landmarks), procedure-specific Gaussian RBF deformation, ControlNet conditioning, Stable Diffusion 1.5 synthesis, and neural post-processing with identity verification.
 
-![Pipeline demo -- rhinoplasty result](demos/demo_pipeline_1.png)
+### Mesh Deformation
 
-Sample outputs are in the [demos/](demos/) directory. ControlNet-generated photorealistic samples will be added after model training completes.
+![Mesh deformation visualization](demos/mesh_deformation.png)
+
+Each procedure preset defines anatomically-grounded displacement vectors for specific landmark subsets. The Gaussian RBF kernel propagates these displacements smoothly to neighboring landmarks, producing natural tissue mobilization patterns.
 
 ---
 
