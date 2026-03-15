@@ -69,6 +69,7 @@ scripts/inference_output/
 # Project management
 PROJECT.md
 /ROADMAP.md
+/BENCHMARKS.md
 STATE.md
 REQUIREMENTS.md
 .planning/
