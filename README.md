@@ -962,6 +962,17 @@ make docker          # build Docker image
 make paper           # build MICCAI paper PDF
 make clean           # remove build artifacts
 ```
+### Pre-commit Setup
+
+Install pre-commit hooks to run linting/formatting automatically before commits:
+```bash
+pip install pre-commit (for faster uv pip install pre-commit)
+pre-commit install
+```
+Run pre-commit manually:
+```bash
+pre-commit run --all-files
+```
 
 <br>
 
