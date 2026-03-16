@@ -28,6 +28,7 @@ def _make_face(seed=42, width=512, height=512):
 # Frankfort horizontal plane
 # ---------------------------------------------------------------------------
 
+
 class TestComputeFrankfortAngle:
     """Tests for compute_frankfort_angle."""
 
@@ -99,6 +100,7 @@ class TestAlignToFrankfort:
 # Asymmetry analysis
 # ---------------------------------------------------------------------------
 
+
 class TestAsymmetryResult:
     """Tests for AsymmetryResult dataclass."""
 
@@ -137,7 +139,10 @@ class TestQuantifyAsymmetry:
             lm[i, 0] = 0.5  # all centered
             lm[i, 1] = 0.5
         face = FaceLandmarks(
-            landmarks=lm, confidence=0.95, image_width=512, image_height=512,
+            landmarks=lm,
+            confidence=0.95,
+            image_width=512,
+            image_height=512,
         )
         result = quantify_asymmetry(face)
         # Near-zero asymmetry for perfectly centered landmarks
@@ -170,6 +175,7 @@ class TestVisualizeAsymmetry:
 # Facial proportions
 # ---------------------------------------------------------------------------
 
+
 class TestFacialProportions:
     """Tests for FacialProportions dataclass."""
 
@@ -177,10 +183,15 @@ class TestFacialProportions:
         from landmarkdiff.clinical import FacialProportions
 
         fp = FacialProportions(
-            upper_third=0.33, middle_third=0.34, lower_third=0.33,
-            upper_lip_ratio=0.33, lower_lip_ratio=0.67,
-            nose_to_face_width=0.25, eye_spacing_ratio=0.30,
-            face_height_to_width=1.618, nose_to_chin_over_lips_to_chin=1.618,
+            upper_third=0.33,
+            middle_third=0.34,
+            lower_third=0.33,
+            upper_lip_ratio=0.33,
+            lower_lip_ratio=0.67,
+            nose_to_face_width=0.25,
+            eye_spacing_ratio=0.30,
+            face_height_to_width=1.618,
+            nose_to_chin_over_lips_to_chin=1.618,
         )
         assert abs(fp.upper_third + fp.middle_third + fp.lower_third - 1.0) < 0.01
 
@@ -235,6 +246,7 @@ class TestVisualizeProportions:
 # ---------------------------------------------------------------------------
 # Septum deviation
 # ---------------------------------------------------------------------------
+
 
 class TestSeptumAnalysis:
     """Tests for SeptumAnalysis dataclass."""
@@ -307,6 +319,7 @@ class TestVisualizeSeptumDeviation:
 # Age-based scaling
 # ---------------------------------------------------------------------------
 
+
 class TestClassifyAgeBracket:
     """Tests for classify_age_bracket."""
 
@@ -378,6 +391,7 @@ class TestScaleIntensityForAge:
 # Detect vitiligo patches
 # ---------------------------------------------------------------------------
 
+
 class TestDetectVitiligoPatches:
     """Tests for detect_vitiligo_patches."""
 
@@ -406,6 +420,7 @@ class TestDetectVitiligoPatches:
 # Keloid exclusion
 # ---------------------------------------------------------------------------
 
+
 class TestGetKeloidExclusionMask:
     """Tests for get_keloid_exclusion_mask."""
 
@@ -428,7 +443,5 @@ class TestGetKeloidExclusionMask:
         from landmarkdiff.clinical import get_keloid_exclusion_mask
 
         face = _make_face()
-        mask = get_keloid_exclusion_mask(
-            face, regions=["jawline", "nose"], width=512, height=512
-        )
+        mask = get_keloid_exclusion_mask(face, regions=["jawline", "nose"], width=512, height=512)
         assert mask.shape == (512, 512)

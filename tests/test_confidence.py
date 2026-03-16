@@ -95,9 +95,7 @@ class TestGenerateConfidenceMap:
         face_before = _make_face(rng)
         face_after = _make_displaced_face(face_before, rng)
 
-        result = generate_confidence_map(
-            face_before, face_after, width=32, height=32, sigma=20.0
-        )
+        result = generate_confidence_map(face_before, face_after, width=32, height=32, sigma=20.0)
         assert result.confidence.shape == (32, 32)
 
     def test_custom_threshold(self):
@@ -108,7 +106,10 @@ class TestGenerateConfidenceMap:
         face_after = _make_displaced_face(face_before, rng)
 
         result = generate_confidence_map(
-            face_before, face_after, width=32, height=32,
+            face_before,
+            face_after,
+            width=32,
+            height=32,
             low_confidence_threshold=0.8,
         )
         assert 0.0 <= result.low_confidence_fraction <= 1.0

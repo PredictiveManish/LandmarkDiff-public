@@ -57,9 +57,7 @@ class TestSliderComposite:
 
         original = np.zeros((64, 64, 3), dtype=np.uint8)
         prediction = np.zeros((64, 64, 3), dtype=np.uint8)
-        result = create_slider_composite(
-            original, prediction, line_color=(0, 0, 255), line_width=3
-        )
+        result = create_slider_composite(original, prediction, line_color=(0, 0, 255), line_width=3)
         assert result.shape == (64, 64, 3)
 
 
