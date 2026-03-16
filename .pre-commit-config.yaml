@@ -26,5 +26,5 @@ repos:
         additional_dependencies: [types-Pillow, types-PyYAML]
         args: [
           --ignore-missing-imports,
-          --exclude=scripts/batch_inference.py
+          --exclude=batch_inference
         ]
