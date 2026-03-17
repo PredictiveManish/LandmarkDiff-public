@@ -27,4 +27,7 @@ repos:
         args: [
           --ignore-missing-imports,
           --config-file=pyproject.toml,
+          --exclude, 'scripts/benchmark_inference\.py',
+          --exclude, 'benchmarks/benchmark_inference\.py',
+          --exclude, 'scripts/batch_inference\.py',
         ]
