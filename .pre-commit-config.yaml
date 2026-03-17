@@ -26,5 +26,5 @@ repos:
         additional_dependencies: [types-Pillow, types-PyYAML]
         args: [
           --ignore-missing-imports,
-          --exclude=scripts/,
+          --config-file=pyproject.toml,
         ]
