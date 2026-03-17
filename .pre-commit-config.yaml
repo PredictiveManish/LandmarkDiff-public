@@ -24,7 +24,4 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [types-Pillow, types-PyYAML]
-        args: [
-          --ignore-missing-imports,
-          --exclude=batch_inference
-        ]
+        args: [--ignore-missing-imports]
