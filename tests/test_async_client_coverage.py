@@ -98,6 +98,7 @@ class TestAsyncHealthErrors:
     def test_health_connection_error(self):
         client = AsyncLandmarkDiffClient()
         mock_session = AsyncMock()
+        mock_session.closed = False
         mock_session.get.side_effect = ConnectionError("refused")
         client._session = mock_session
 
@@ -140,6 +141,7 @@ class TestAsyncProceduresErrors:
     def test_procedures_connection_error(self):
         client = AsyncLandmarkDiffClient()
         mock_session = AsyncMock()
+        mock_session.closed = False
         mock_session.get.side_effect = OSError("Connection refused")
         client._session = mock_session
 
