@@ -271,22 +271,21 @@ def build_app():
         theme=gr.themes.Soft(),
         css=custom_css,
     ) as app:
-
         # Toggle button on top right
         theme_toggle = gr.Button("🌙 Dark / ☀️ Light", elem_id="theme-toggle-btn")
         theme_toggle.click(
-        fn=None,
-        inputs=[],
-        outputs=[],
-        js="""
-        () => {
-            const url = new URL(window.location.href);
-            const current = url.searchParams.get('__theme');
-            url.searchParams.set('__theme', (!current || current === 'light') ? 'dark' : 'light');
-            window.location.href = url.toString();
-        }
-        """
-    )
+            fn=None,
+            inputs=[],
+            outputs=[],
+            js="""
+            () => {
+                const url = new URL(window.location.href);
+                const current = url.searchParams.get('__theme');
+                url.searchParams.set('__theme', (!current || current === 'light') ? 'dark' : 'light');
+                window.location.href = url.toString();
+            }
+            """,
+        )
 
         gr.Markdown(
             "# LandmarkDiff\n"
@@ -295,7 +294,6 @@ def build_app():
             "Supports frontal, 3/4, and profile views. "
             "Clinical edge cases (vitiligo, Bell's palsy, keloid) can be toggled below."
         )
-
 
         # ---- Tab 1: Single Procedure ----
         with gr.Tab("Single Procedure"):
