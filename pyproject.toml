@@ -197,6 +197,11 @@ warn_unused_configs = true
 disallow_untyped_defs = false
 check_untyped_defs = false
 ignore_missing_imports = true
+exclude = [
+    "scripts/batch_inference.py",
+    "scripts/benchmark_inference.py",
+    "examples/*.ipynb",
+]
 
 [[tool.mypy.overrides]]
 module = [
@@ -240,6 +245,3 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = ["scripts.*"]
 ignore_errors = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
