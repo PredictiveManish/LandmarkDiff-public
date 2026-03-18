@@ -312,10 +312,11 @@ class TestLandmarkDiffPipeline:
         image = np.full((128, 128, 3), 127, dtype=np.uint8)
         face = _make_face(width=512, height=512)
         expected = np.full((512, 512, 3), 201, dtype=np.uint8)
-        calls = {"init_path": None, "warp_calls": 0}
+        calls = {"init_path": None, "init_calls": 0, "warp_calls": 0}
 
         class DummyRuntime:
             def __init__(self, onnx_path):
+                calls["init_calls"] += 1
                 calls["init_path"] = onnx_path
 
             def warp(self, img, src, dst):
@@ -352,9 +353,11 @@ class TestLandmarkDiffPipeline:
 
         pipe = LandmarkDiffPipeline(mode="tps", tps_backend="onnx", tps_onnx_path="dummy.onnx")
         result = pipe.generate(image, procedure="rhinoplasty", postprocess=False)
+        pipe.generate(image, procedure="rhinoplasty", postprocess=False)
 
         assert calls["init_path"] == "dummy.onnx"
-        assert calls["warp_calls"] == 1
+        assert calls["init_calls"] == 1
+        assert calls["warp_calls"] == 2
         np.testing.assert_array_equal(result["output_tps"], expected)
         np.testing.assert_array_equal(result["output"], expected)
 
@@ -400,6 +403,98 @@ class TestLandmarkDiffPipeline:
         result_2 = pipe.generate(image, procedure="rhinoplasty", postprocess=False)
 
         assert calls["init_calls"] == 1
+        assert calls["fallback_calls"] == 2
+        np.testing.assert_array_equal(result_1["output_tps"], fallback)
+        np.testing.assert_array_equal(result_2["output_tps"], fallback)
+
+    def test_generate_falls_back_to_numpy_when_onnx_path_missing(self, monkeypatch):
+        from landmarkdiff.inference import LandmarkDiffPipeline
+
+        image = np.full((128, 128, 3), 127, dtype=np.uint8)
+        face = _make_face(width=512, height=512)
+        fallback = np.full((512, 512, 3), 166, dtype=np.uint8)
+        calls = {"fallback_calls": 0}
+
+        def fake_fallback(*args, **kwargs):
+            calls["fallback_calls"] += 1
+            return fallback
+
+        monkeypatch.setattr("landmarkdiff.inference.extract_landmarks", lambda _img: face)
+        monkeypatch.setattr(
+            "landmarkdiff.inference.apply_procedure_preset",
+            lambda *args, **kwargs: face,
+        )
+        monkeypatch.setattr(
+            "landmarkdiff.inference.render_landmark_image",
+            lambda *args, **kwargs: np.zeros((512, 512, 3), dtype=np.uint8),
+        )
+        monkeypatch.setattr(
+            "landmarkdiff.inference.generate_surgical_mask",
+            lambda *args, **kwargs: np.ones((512, 512), dtype=np.float32),
+        )
+        monkeypatch.setattr(
+            "landmarkdiff.inference.mask_composite",
+            lambda warped, original, mask: warped,
+        )
+        monkeypatch.setattr(
+            "landmarkdiff.inference.TPSONNXRuntime",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                AssertionError("runtime should not be initialized without path")
+            ),
+        )
+        monkeypatch.setattr("landmarkdiff.inference.warp_image_tps", fake_fallback)
+
+        pipe = LandmarkDiffPipeline(mode="tps", tps_backend="onnx", tps_onnx_path=None)
+        result = pipe.generate(image, procedure="rhinoplasty", postprocess=False)
+
+        assert calls["fallback_calls"] == 1
+        np.testing.assert_array_equal(result["output_tps"], fallback)
+
+    def test_generate_falls_back_when_onnx_runtime_warp_fails(self, monkeypatch):
+        from landmarkdiff.inference import LandmarkDiffPipeline
+
+        image = np.full((128, 128, 3), 127, dtype=np.uint8)
+        face = _make_face(width=512, height=512)
+        fallback = np.full((512, 512, 3), 188, dtype=np.uint8)
+        calls = {"warp_calls": 0, "fallback_calls": 0}
+
+        class RuntimeWithFailingWarp:
+            def __init__(self, onnx_path):
+                assert onnx_path == "dummy.onnx"
+
+            def warp(self, img, src, dst):
+                calls["warp_calls"] += 1
+                raise RuntimeError("ORT execution failed")
+
+        def fake_fallback(*args, **kwargs):
+            calls["fallback_calls"] += 1
+            return fallback
+
+        monkeypatch.setattr("landmarkdiff.inference.extract_landmarks", lambda _img: face)
+        monkeypatch.setattr(
+            "landmarkdiff.inference.apply_procedure_preset",
+            lambda *args, **kwargs: face,
+        )
+        monkeypatch.setattr(
+            "landmarkdiff.inference.render_landmark_image",
+            lambda *args, **kwargs: np.zeros((512, 512, 3), dtype=np.uint8),
+        )
+        monkeypatch.setattr(
+            "landmarkdiff.inference.generate_surgical_mask",
+            lambda *args, **kwargs: np.ones((512, 512), dtype=np.float32),
+        )
+        monkeypatch.setattr(
+            "landmarkdiff.inference.mask_composite",
+            lambda warped, original, mask: warped,
+        )
+        monkeypatch.setattr("landmarkdiff.inference.TPSONNXRuntime", RuntimeWithFailingWarp)
+        monkeypatch.setattr("landmarkdiff.inference.warp_image_tps", fake_fallback)
+
+        pipe = LandmarkDiffPipeline(mode="tps", tps_backend="onnx", tps_onnx_path="dummy.onnx")
+        result_1 = pipe.generate(image, procedure="rhinoplasty", postprocess=False)
+        result_2 = pipe.generate(image, procedure="rhinoplasty", postprocess=False)
+
+        assert calls["warp_calls"] == 1
         assert calls["fallback_calls"] == 2
         np.testing.assert_array_equal(result_1["output_tps"], fallback)
         np.testing.assert_array_equal(result_2["output_tps"], fallback)
