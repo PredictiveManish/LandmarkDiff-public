@@ -121,16 +121,16 @@ class HealthChecker:
         results: list[CheckResult] = []
 
         for name, check_fn in self._checks.items():
-            start = time.monotonic()
+            start = time.perf_counter()
             try:
                 result = check_fn()
-                result.duration_ms = (time.monotonic() - start) * 1000
+                result.duration_ms = (time.perf_counter() - start) * 1000
             except Exception as e:
                 result = CheckResult(
                     name=name,
                     healthy=False,
                     message=f"Check raised exception: {e}",
-                    duration_ms=(time.monotonic() - start) * 1000,
+                    duration_ms=(time.perf_counter() - start) * 1000,
                 )
             result.name = name
             results.append(result)
