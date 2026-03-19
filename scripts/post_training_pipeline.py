@@ -61,7 +61,7 @@ class PipelineStep:
         print(f"{'─' * 60}")
 
         self.status = "running"
-        t0 = time.time()
+        t0 = time.perf_counter()
 
         try:
             self.result = func(*args, **kwargs) or {}
@@ -74,7 +74,7 @@ class PipelineStep:
 
             traceback.print_exc()
 
-        self.elapsed = time.time() - t0
+        self.elapsed = time.perf_counter() - t0
         status_icon = "OK" if self.status == "completed" else "FAIL"
         print(f"  [{status_icon}] {self.name} ({self.elapsed:.1f}s)")
 
