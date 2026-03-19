@@ -1065,11 +1065,11 @@ We track all contributions and contributors will be acknowledged in the MICCAI 2
 | [@dreamlessx](https://github.com/dreamlessx) | Core architecture, training pipeline, paper |
 | [@Deepak8858](https://github.com/Deepak8858) | Brow lift procedure preset ([#35](https://github.com/dreamlessx/LandmarkDiff-public/pull/35)) |
 | [@P-r-e-m-i-u-m](https://github.com/P-r-e-m-i-u-m) | Mentoplasty procedure preset ([#36](https://github.com/dreamlessx/LandmarkDiff-public/pull/36)) |
-| [@PredictiveManish](https://github.com/PredictiveManish) | OpenAPI spec ([#340](https://github.com/dreamlessx/LandmarkDiff-public/pull/340)), batch notebook ([#334](https://github.com/dreamlessx/LandmarkDiff-public/pull/334)), pre-commit + mypy fix ([#386](https://github.com/dreamlessx/LandmarkDiff-public/pull/386)) |
+| [@PredictiveManish](https://github.com/PredictiveManish) | OpenAPI spec ([#340](https://github.com/dreamlessx/LandmarkDiff-public/pull/340)), batch notebook ([#334](https://github.com/dreamlessx/LandmarkDiff-public/pull/334)), pre-commit + mypy ([#386](https://github.com/dreamlessx/LandmarkDiff-public/pull/386), [#405](https://github.com/dreamlessx/LandmarkDiff-public/pull/405)) |
 | [@lshariprasad](https://github.com/lshariprasad) | histogram_match_skin tests ([#263](https://github.com/dreamlessx/LandmarkDiff-public/pull/263)) |
 | [@dagangtj](https://github.com/dagangtj) | SafetyResult dataclass, file logging, API error messages ([#235](https://github.com/dreamlessx/LandmarkDiff-public/pull/235), [#236](https://github.com/dreamlessx/LandmarkDiff-public/pull/236), [#237](https://github.com/dreamlessx/LandmarkDiff-public/pull/237)) |
 | [@srikar117](https://github.com/srikar117) | Dark mode toggle for Gradio app ([#387](https://github.com/dreamlessx/LandmarkDiff-public/pull/387)) |
-| [@Flames4fun](https://github.com/Flames4fun) | ONNX TPS warp export with CPU validation + benchmark ([#404](https://github.com/dreamlessx/LandmarkDiff-public/pull/404)) |
+| [@Flames4fun](https://github.com/Flames4fun) | ONNX TPS warp export ([#404](https://github.com/dreamlessx/LandmarkDiff-public/pull/404)), ONNX inference backend ([#408](https://github.com/dreamlessx/LandmarkDiff-public/pull/408)) |
 | [@passionworkeer](https://github.com/passionworkeer) | Docker architecture feedback ([#5](https://github.com/dreamlessx/LandmarkDiff-public/issues/5)) |
 
 To join this list, open a PR or contribute to an issue. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
